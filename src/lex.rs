@@ -309,24 +309,30 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
 }
 
 pub fn report_error(error_message: String, token: Option<&TokenInfo>, place: Option<&Place>, error_line: Option<String>) {
-    print!("[] Err: {}\n", error_message);
+    print!("{}", create_error_msg(error_message, token, place, error_line));
+}
+
+pub fn create_error_msg(error_message: String, token: Option<&TokenInfo>, place: Option<&Place>, error_line: Option<String>) -> String {
+    let mut str_builder = String::new();
+    str_builder = format!("{}{}", str_builder, format!("[] Err: {}\n", error_message));
     if let Some(tok) = token {
-        print!("[] Err: Compilation failed on: {:?}, at (line, column): ({}, {})\n", tok.token, tok.place.line, tok.place.column);
+        str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed on: {:?}, at (line, column): ({}, {})\n", tok.token, tok.place.line, tok.place.column));
         if let Some(err_l) = &tok.place.full_line {
-            print!("[] Err: Compilation failed on line: {}\n", err_l);
+            str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed on line: {}\n", err_l));
         }
     }
     if let Some(pl) = place {
-        print!("[] Err: Compilation failed at (line, column): ({}, {})\n", pl.line, pl.column);
+        str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed at (line, column): ({}, {})\n", pl.line, pl.column));
     }
     if let Some(er_l) = error_line {
-        print!("[] Error line: {}\n", er_l);
+        str_builder = format!("{}{}", str_builder, format!("[] Error line: {}\n", er_l));
     }
-    // print!("[] Err: {}\n", );
+    return str_builder;
 }
 
 
 mod tests {
+    #![allow(unused_imports)]
     use crate::{*, lex::Operator};
 
     use super::{lex_content, TokenInfo, Token, Place};

@@ -13,15 +13,25 @@ fn main() {
         TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
         TokenInfo::new(Token::IntegerLiteral(3), place.clone()),
         TokenInfo::new(Token::Keyword(Keyword::Let), place.clone()),
-        // line 1: 1 + 2 + 3 let 13 + 13
+        TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
+        TokenInfo::new(Token::IntegerLiteral(4), place.clone()),
+        TokenInfo::new(Token::Operator(Operator::Semicolon), place.clone()),
+        // line 1: 1 + 1 + 1 let + 1; 
+        // line 2: 1 + 1;
         TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
         TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
         TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
     ];
 
-    let a = prase_expression(tokens);
+    let (exps, index, errors) =  
+    // let k = 
+            prase_expression(tokens);
 
-    dbg!(a);
+    for e in errors {
+        print!("{}\n", e);
+    }
+
+    // dbg!(k);
 }
 
 
@@ -39,43 +49,41 @@ fn main2() -> std::io::Result<()> {
     // }
     // Ok(())
 
-    if let Ok(tokens) = lex::lex_content(content) {
-        for (line_toks, line) in tokens {
-            if let Ok((_, i)) = prase_expression(line_toks) {
-                // dbg!("{}", exp);
-                println!("{}", i)
-            }
-        }
-    }
+    // if let Ok(tokens) = lex::lex_content(content) {
+    //     for (line_toks, line) in tokens {
+    //         if let Ok((_, i)) = prase_expression(line_toks) {
+    //             // dbg!("{}", exp);
+    //             println!("{}", i)
+    //         }
+    //     }
+    // }
     Ok(())
 }
 
-fn prase_expression(expression_tokens: Vec<TokenInfo>) -> Result<(Vec<Expression>, usize), String> {
+fn prase_expression(expression_tokens: Vec<TokenInfo>) -> (Vec<Expression>, usize, Vec<String>) {
     let mut exps = Vec::new();
+    let mut errors = Vec::new();
     let mut st_index = 0;
-    while st_index <= expression_tokens.len() {
-        let re = prase_eqs(&expression_tokens, st_index);
-        if let Ok((exp, ind)) = re {
-            if exp == Expression::Eoe {
-                break;
+    while st_index < expression_tokens.len() {
+        match prase_eqs(&expression_tokens, st_index) {
+            Ok((exp, ind)) => {
+                // dbg!(&exps);
+                st_index = ind;
+                exps.push(exp);
             }
-            exps.push(exp);
-            // dbg!(&exps);
-            st_index = ind;
-        } else if let Err(msg) = re {
-            println!("{}", msg);
-            st_index = find_next_start(&expression_tokens, st_index);
+            Err(msg) => {
+                errors.push(msg);
+                st_index = find_next_start(&expression_tokens, st_index);
+            }
         }
     }
-    return Ok((exps, st_index));
+    return (exps, st_index, errors);
 }
 
 fn prase_eqs(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, usize), String> {
     // scan tokens at lower level, RETURNING when seeing Eq or Neq operator
     let res = prase_comparisons(tokens, index);
-        // .and(res)
-        // .or(prase_comparisons(&tokens, find_next_start(&tokens, index)));
-    
+
     if res.is_err() {
         return res; 
     }
@@ -83,23 +91,28 @@ fn prase_eqs(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, usize
     // if seeing those operators
     'outer: loop {
         let current_token = tokens.get(current_index);
-        if let Some(Token::Operator(Operator::Eq | Operator::Neq)) = current_token.map(|t| &t.token) {
-            
-            let operator = &current_token.expect("Unr!").token;
-            // scan again at lower levels, RETURNING when seeing Eq or Neq operator 
-            
-            let parse_result = prase_comparisons(tokens, current_index + 1);
-            if let Ok(parse_res) =  parse_result {
-                let right = parse_res.0;
-                current_index = parse_res.1;
+        match current_token.map(|t| &t.token) {
+            Some(Token::Operator(Operator::Eq | Operator::Neq)) => {
+                let operator = &current_token.expect("Unr!").token;
+                // scan again at lower levels, RETURNING when seeing Eq or Neq operator 
+                
+                let parse_result = prase_comparisons(tokens, current_index + 1);
+                if let Ok(parse_res) =  parse_result {
+                    let right = parse_res.0;
+                    current_index = parse_res.1;
 
-                ret_left = Expression::Binary(Box::new(ret_left), operator.clone(), Box::new(right));
-            } else {
-                // if result is Err, return
-                return parse_result;
+                    ret_left = Expression::Binary(Box::new(ret_left), operator.clone(), Box::new(right));
+                } else {
+                    // if result is Err, return
+                    return parse_result;
+                }
+            },
+            Some(_) => return Err(lex::create_error_msg( // #TODO: validate if this check is not needed in other parse_<> funcs 
+        "Unexpected token: Expected Exprssion.".to_owned(), 
+                current_token, None, None)),
+            None => { 
+                break 'outer; 
             }
-        } else {
-            break 'outer;
         }
     }
     return Ok((ret_left, current_index));
@@ -242,15 +255,16 @@ fn prase_primary(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, u
             if let Some(Token::Operator(Operator::CloParenth)) = after_token.map(|t| &t.token) {
                 return Ok((Expression::Grouping(Box::new(expr)), n_index + 1));
             } else {
-                lex::report_error(
+                lex::create_error_msg(
                     "Expected ')' that was never found. ".to_owned(), 
                     Some(current_token.unwrap()), None, None
                 );
                 return Err("Unfinished parentheses".to_owned());
             }
         }
-        None => return Ok((Expression::Eoe, index)),
-        _    => return Err("Expected expression".to_string()),
+        Some(_) | None => return Err(lex::create_error_msg(
+        "Unexpected token: Expected Exprssion.".to_owned(), 
+            current_token, None, None)),
     }
 }
 
@@ -267,16 +281,16 @@ fn find_next_start(tokens: &Vec<TokenInfo>, index: usize) -> usize {
         .unwrap_or(tokens.len() + 1)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Expression {
     Literal(Token),
     Grouping(Box<Expression>),
     Unary(Token, Box<Expression>),
     Binary(Box<Expression>, Token, Box<Expression>),
-    Eoe,
 }
 
 mod tests {
+    #![allow(unused_imports)]
     use crate::{lex::{TokenInfo, Place, Token, Keyword, Operator}, find_next_start, prase_expression, Expression};
 
 
@@ -322,17 +336,18 @@ fn sohuld_parse_expression_and_expect_panic() {
         TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
     ];
 
-    let (res_e, ind) = prase_expression(tokens).unwrap();
-    // assert_eq!(
-    //     res_e, 
-    //     Expression::Binary(
-    //         Box::new(Expression::Literal(Token::IntegerLiteral(13))), 
-    //         Token::Operator(Operator::Plus), 
-    //         Box::new(Expression::Literal(Token::IntegerLiteral(13)))
-    //     )
-    // );
-
-    assert_eq!(ind, 11);
+    let (res_e, ind, s) = prase_expression(tokens);
+    assert_eq!(
+        res_e, 
+        vec![Expression::Binary(
+            Box::new(Expression::Literal(Token::IntegerLiteral(13))), 
+            Token::Operator(Operator::Plus), 
+            Box::new(Expression::Literal(Token::IntegerLiteral(13)))
+        )]
+    );
+    assert_eq!(ind, 12);
+    assert_eq!(s.len(), 2);
+    
 }
 
 
