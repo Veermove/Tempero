@@ -14,6 +14,13 @@ pub enum Token {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Operator {
+
+// Missing Operators:
+//  *|
+
+    // takse l-expressions, and supplies it as first argument 
+    // <expression> *| <function call>
+
     Eq,         // ==
     Neq,        // != 
     Greater,    // >
@@ -26,6 +33,13 @@ pub enum Operator {
     Div,        // /
     Semicolon,  // ;
     Not,        // !
+    And,        // &&
+    Or,         // ||
+    BitAnd,     // &
+    BitOr,      // |
+    Shl,        // <<
+    Shr,        // >> 
+    Modulo,     // %
 
     Assign,     //  =
     AssingInc,  // +=
@@ -37,10 +51,14 @@ pub enum Operator {
     IfExpr,     // ? <expr if true>
     ElseExpr,   // : <expr if false>
 
+    ModStream,  // ::
+
     OpBrace,    // {
     CloBrace,   // }
     OpParenth,  // (
     CloParenth, // )
+    OpArr,      // [
+    CloArr,     // ]
     
     Separator   // ,
 }
@@ -195,6 +213,10 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                             let _ = char_itr.next().expect("Unr!");
                             TokenInfo::new(Token::Operator(Operator::LesserEq), place)
                         },
+                        Some((_, '<')) => {
+                            let _ = char_itr.next().expect("Unr!");
+                            TokenInfo::new(Token::Operator(Operator::Shl), place)
+                        },
                         _ => TokenInfo::new(Token::Operator(Operator::Lesser), place),
                     });
                 },
@@ -203,6 +225,10 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                             Some((_, '=')) => {
                                 let _ = char_itr.next().expect("Unr!");
                                 TokenInfo::new(Token::Operator(Operator::GreaterEq), place)
+                            },
+                            Some((_, '>')) => {
+                                let _ = char_itr.next().expect("Unr!");
+                                TokenInfo::new(Token::Operator(Operator::Shr), place)
                             },
                             _ => TokenInfo::new(Token::Operator(Operator::Greater), place),
                         }
@@ -278,7 +304,34 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                     tokens.push(TokenInfo::new(Token::Operator(Operator::IfExpr), place));
                 },
                 ':' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::ElseExpr), place));
+                    tokens.push(match char_itr.peek() {
+                        Some((_, ':')) => {
+                            let _ = char_itr.next().expect("Unr!");
+                            TokenInfo::new(Token::Operator(Operator::ModStream), place)
+                        },
+                        _ => TokenInfo::new(Token::Operator(Operator::ElseExpr), place),
+                    });
+                },
+                '&' => {
+                    tokens.push(match char_itr.peek() {
+                        Some((_, '&')) => {
+                            let _ = char_itr.next().expect("Unr!");
+                            TokenInfo::new(Token::Operator(Operator::And), place)
+                        },
+                        _ => TokenInfo::new(Token::Operator(Operator::BitAnd), place),
+                    });
+                },
+                '|' => {
+                    tokens.push(match char_itr.peek() {
+                        Some((_, '|')) => {
+                            let _ = char_itr.next().expect("Unr!");
+                            TokenInfo::new(Token::Operator(Operator::Or), place)
+                        },
+                        _ => TokenInfo::new(Token::Operator(Operator::BitOr), place),
+                    });
+                }
+                '%' => {
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::Modulo), place));
                 },
                 '{' => {
                     tokens.push(TokenInfo::new(Token::Operator(Operator::OpBrace), place));
@@ -291,6 +344,12 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                 },
                 ')' => {
                     tokens.push(TokenInfo::new(Token::Operator(Operator::CloParenth), place));
+                },
+                '[' => {
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpArr), place));
+                },
+                ']' => {
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloArr), place));
                 },
                 ',' => {
                     tokens.push(TokenInfo::new(Token::Operator(Operator::Separator), place));
