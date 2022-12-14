@@ -1,3 +1,4 @@
+// TODO: Move literals to separate enum and introduce Tuple Literal
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     FloatLiteral(f64),
@@ -15,7 +16,7 @@ pub enum Token {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Operator {
 
-// Missing Operators:
+// TODO: Missing Operators:
 //  *|
 
     // takse l-expressions, and supplies it as first argument 
@@ -68,10 +69,12 @@ pub enum Keyword {
     Let,
     For,
     If,
-    Else,
+    Else ,
     Func,
 }
 
+// TODO: Replace TokenInfo and Place for LineOfTokens,
+// so that Token does not store full line
 #[derive(Debug, Clone, PartialEq)]
 pub struct Place {
     column: usize,

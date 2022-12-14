@@ -84,6 +84,18 @@ fn prase_expression(expression_tokens: Vec<TokenInfo>) -> (Vec<Expression>, usiz
     return (exps, st_index, errors);
 }
 
+// TODO: write function get_expression_type :: Expression -> Type
+
+#[derive(Debug, PartialEq, Clone)]
+enum Expression {
+    Literal(Token),
+    Grouping(Box<Expression>),
+    Unary(Token, Box<Expression>),
+    Binary(Box<Expression>, Token, Box<Expression>),
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
+    Tuple(Vec<Expression>)
+}
+
 fn start_parse(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, usize), String> {
     parse_conditional_exp(tokens, index)
 }
@@ -286,13 +298,40 @@ fn prase_primary(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, u
 
             let after_token = tokens.get(n_index);
 
-            if let Some(Token::Operator(Operator::CloParenth)) = after_token.map(|t| &t.token) {
-                return Ok((Expression::Grouping(Box::new(expr)), n_index + 1));
-            } else {
-                return Err(lex::create_error_msg(
-                    "Expected ')' that was never found. ".to_owned(), 
-                    Some(current_token.unwrap()), None, None
-                ));
+            match after_token.map(|t| &t.token) {
+                Some(Token::Operator(Operator::CloParenth)) => { // Grouping 
+                    return Ok((Expression::Grouping(Box::new(expr)), n_index + 1));
+                },
+                Some(Token::Operator(Operator::Separator)) => { // Tuples
+                    let mut next_index = n_index + 1;
+                    let mut tuple_vals = vec![expr];
+                    return loop {
+                        let (parsed_expr, ni) = start_parse(tokens, next_index)?;
+                        tuple_vals.push(parsed_expr);
+                        next_index = ni;
+
+                        match tokens.get(next_index).map(|t| &t.token) {
+                            Some(Token::Operator(Operator::Separator)) => {
+                                next_index = next_index + 1
+                            },
+                            Some(Token::Operator(Operator::CloParenth)) => {
+                                break Ok((Expression::Tuple(tuple_vals), next_index + 1));
+                            },
+                            _ => {
+                                break Err(lex::create_error_msg(
+                                    "Expected ')' that was never found. ".to_owned(), 
+                                    Some(current_token.unwrap()), None, None
+                                ));
+                            }
+                        };
+                    }
+                },
+                _ => {
+                    return Err(lex::create_error_msg(
+                        "Expected ')' that was never found. ".to_owned(), 
+                        Some(current_token.unwrap()), None, None
+                    ));
+                }
             }
         },
         None | Some(_) => return Err(lex::create_error_msg(
@@ -312,15 +351,6 @@ fn find_next_start(tokens: &Vec<TokenInfo>, index: usize) -> usize {
         })
         .map(|(i, _)| i + 1)
         .unwrap_or(tokens.len() + 1)
-}
-
-#[derive(Debug, PartialEq, Clone)]
-enum Expression {
-    Literal(Token),
-    Grouping(Box<Expression>),
-    Unary(Token, Box<Expression>),
-    Binary(Box<Expression>, Token, Box<Expression>),
-    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
 mod tests {
@@ -421,6 +451,50 @@ fn should_parse_factor_lvl_grouped_ungrouped() {
     // 
 
     // assert_eq!(res, Ok((Expression::Grouping(Box::new(Expression::Literal(Token::BooleanLiteral(true)))), 3)), "Grouped");
+}
+
+#[test]
+fn should_parse_tuples() {
+
+    let expr = "(1, true, !(false || true), (1, 2), 1 + 2)\n(1, (2), ((2, 3)))".to_owned();
+    
+    use Expression::*;
+    let expected = vec![
+        Ok((
+            Tuple(vec![
+                Literal(Token::IntegerLiteral(1)),
+                Literal(Token::BooleanLiteral(true)),
+                Unary(
+                    Token::Operator(Operator::Not), 
+                    Box::new(Grouping(Box::new(Binary(
+                        Box::new(Literal(Token::BooleanLiteral(false))),
+                        Token::Operator(Operator::Or),
+                        Box::new(Literal(Token::BooleanLiteral(true)))
+                    ))))
+                ),
+                Tuple(vec![Literal(Token::IntegerLiteral(1)), Literal(Token::IntegerLiteral(2))]),
+                Binary(
+                    Box::new(Literal(Token::IntegerLiteral(1))),
+                    Token::Operator(Operator::Plus),
+                    Box::new(Literal(Token::IntegerLiteral(2)))
+                )
+            ]),
+        22)),
+        Ok((
+            Tuple(vec![
+                Literal(Token::IntegerLiteral(1)),
+                Grouping(Box::new(Literal(Token::IntegerLiteral(2)))),
+                Grouping(Box::new(Tuple(vec![Literal(Token::IntegerLiteral(2)), Literal(Token::IntegerLiteral(3))]))),
+            ]),
+        15))
+    ];
+
+    let lex_res = lex::lex_content(expr).unwrap();
+    assert!(lex_res.len() == expected.len());
+    for ((r, _), exp) in lex_res.into_iter().zip(expected.into_iter()) {
+        let res = start_parse(&r, 0);
+        assert_eq!(res, exp, "Grouped and nested");
+    }
 }
 
 #[test]
@@ -705,7 +779,6 @@ fn should_parse_nested_conditional_expressions() {
     use Token::*;
     for (r, _) in lex_res {
         let res = start_parse(&r, 0);
-        dbg!(&res);
         assert_eq!(res, Ok((
             Conditional(
                 Box::new(Literal(IntegerLiteral(1))),
