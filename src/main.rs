@@ -1,16 +1,39 @@
 mod lex;
 mod parse;
-mod r#type;
+mod typedExpr;
+mod eval;
 
-use std::{fs::File, io::Read};
+use std::{fs::File, io::{self, Read}};
+
+
 
 use lex::*;
 use parse::*;
-use r#type::*;
+use typedExpr::*;
 
 fn main() {
-    loop {
-        
+    let mut buffer = String::new();
+    print!(">");
+    while let Ok(_) = io::stdin().read_line(&mut buffer) {
+        print!(">");
+        let tokens = lex_content_simple(buffer.drain(0..).collect());
+        if let Ok(cont) = tokens {
+            let (asts, _, errors) = parse::prase_expressions(cont);
+            for t in &asts {
+                dbg!(&t);
+            }
+            assert!(errors.is_empty());
+            let asts = asts.into_iter()
+                .map(typedExpr::TExpression::new)
+                .map(|r| r.unwrap())
+                .collect::<Vec<TExpression>>();
+
+            for t in asts {
+                dbg!(&t);
+            }
+        }
+
+        buffer.drain(0..);
     }
 }
 
@@ -26,7 +49,7 @@ fn main1() {
     //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
     //     TokenInfo::new(Token::IntegerLiteral(4), place.clone()),
     //     TokenInfo::new(Token::Operator(Operator::Semicolon), place.clone()),
-    //     // line 1: 1 + 1 + 1 let + 1; 
+    //     // line 1: 1 + 1 + 1 let + 1;
     //     // line 2: 1 + 1;
     //     TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
     //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
@@ -36,10 +59,10 @@ fn main1() {
     // // let (res_e, ind, s) = prase_expression(tokens);
     // dbg!(&res_e, ind, &s);
     // assert_eq!(
-    //     res_e, 
+    //     res_e,
     //     vec![Expression::Binary(
-    //         Box::new(Expression::Literal(Token::IntegerLiteral(13))), 
-    //         Token::Operator(Operator::Plus), 
+    //         Box::new(Expression::Literal(Token::IntegerLiteral(13))),
+    //         Token::Operator(Operator::Plus),
     //         Box::new(Expression::Literal(Token::IntegerLiteral(13)))
     //     )]
     // );
@@ -57,4 +80,3 @@ fn main2() -> std::io::Result<()> {
     // let ast = parse::prase_expressions(expression_tokens)
     Ok(())
 }
-

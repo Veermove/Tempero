@@ -13,17 +13,25 @@ pub enum Token {
     Eof,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Literal {
+    Float(f64),
+    Integer(i64),
+    Boolean(bool),
+    String(String),
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Operator {
 
 // TODO: Missing Operators:
 //  *|
 
-    // takse l-expressions, and supplies it as first argument 
+    // takse l-expressions, and supplies it as first argument
     // <expression> *| <function call>
 
     Eq,         // ==
-    Neq,        // != 
+    Neq,        // !=
     Greater,    // >
     GreaterEq,  // >=
     Lesser,     // <
@@ -39,7 +47,7 @@ pub enum Operator {
     BitAnd,     // &
     BitOr,      // |
     Shl,        // <<
-    Shr,        // >> 
+    Shr,        // >>
     Modulo,     // %
 
     Assign,     //  =
@@ -60,7 +68,7 @@ pub enum Operator {
     CloParenth, // )
     OpArr,      // [
     CloArr,     // ]
-    
+
     Separator   // ,
 }
 
@@ -105,10 +113,19 @@ impl TokenInfo {
     }
 }
 
+pub fn lex_content_simple(content: String) -> Result<Vec<TokenInfo>, ()> {
+    lex_content(content)
+        .map(|line_tokens| line_tokens
+            .into_iter()
+            .flat_map(|(tokens, line)| tokens)
+            .collect()
+        )
+}
+
 pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()> {
     let mut lines: Vec<(Vec<TokenInfo>, String)> = Vec::new();
     let mut line_counter: usize = 1;
-    let mut ml_comment = false; 
+    let mut ml_comment = false;
     for line in content.lines() {
 
         let mut char_itr = line.char_indices().peekable();
@@ -124,7 +141,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
             } else if ml_comment {
                 continue 'over_line_loop;
             }
-            
+
             match current_char {
                 '"' => {
                     let mut literal_buffor = Vec::new();
@@ -142,7 +159,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                             break 'str_literal_loop;
                         }
                     }
-                    
+
                     tokens.push(TokenInfo::new(Token::StringLiteral(literal_buffor.iter().collect()), place.clone()));
                 },
                 '0'..='9' => {
@@ -156,7 +173,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                             break 'digit_loop;
                         }
                     }
-                    
+
                     let mut t_itr = literal_buffor.split(|c| *c == '.');
                     match (t_itr.next(), t_itr.next(), t_itr.next()) {
                         (Some(ints), Some(decims), None) => {
@@ -168,7 +185,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                             } else {
                                 report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()))
                             }
-                            
+
                         },
                         (Some(ints), None, None) => {
                             let f_literal = ints.into_iter()
@@ -199,14 +216,14 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                     let idenf: String = identifier_buffor.into_iter().collect();
 
                     let token = match idenf.as_str() {
-                        "let"   => Token::Keyword(Keyword::Let), 
-                        "for"   => Token::Keyword(Keyword::For), 
-                        "if"    => Token::Keyword(Keyword::If), 
-                        "else"  => Token::Keyword(Keyword::Else), 
+                        "let"   => Token::Keyword(Keyword::Let),
+                        "for"   => Token::Keyword(Keyword::For),
+                        "if"    => Token::Keyword(Keyword::If),
+                        "else"  => Token::Keyword(Keyword::Else),
                         "func"  => Token::Keyword(Keyword::Func),
                         "true"  => Token::BooleanLiteral(true),
                         "false" => Token::BooleanLiteral(false),
-                        _       => Token::Identifier(idenf), 
+                        _       => Token::Identifier(idenf),
                     };
                     tokens.push(TokenInfo::new(token, place));
                 }
@@ -365,7 +382,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
         lines.push((tokens.drain(0..).collect(), line.to_owned()));
         line_counter += 1;
 
-    }; 
+    };
 
     return Ok(lines);
 }
@@ -401,7 +418,7 @@ mod tests {
 
 #[test]
 fn should_lex_string_literal() {
-    assert_eq!(lex_content("\"ESSA\"".to_owned()), 
+    assert_eq!(lex_content("\"ESSA\"".to_owned()),
         Ok(vec![
             (vec![
                 (TokenInfo::new(Token::StringLiteral("ESSA".to_owned()), Place::new_full((1, 1), "\"ESSA\"".to_owned())))
@@ -412,7 +429,7 @@ fn should_lex_string_literal() {
 
 #[test]
 fn should_parse_identifier() {
-    assert_eq!(lex_content("thisIsMy_d".to_owned()), 
+    assert_eq!(lex_content("thisIsMy_d".to_owned()),
         Ok(vec![
             (vec![
                 (TokenInfo::new(Token::Identifier("thisIsMy_d".to_owned()), Place::new_full((1, 1), "thisIsMy_d".to_owned())))
@@ -423,7 +440,7 @@ fn should_parse_identifier() {
 
 #[test]
 fn should_parse_number_literals() {
-    assert_eq!(lex_content("420.69 17".to_owned()), 
+    assert_eq!(lex_content("420.69 17".to_owned()),
         Ok(vec![
             (vec![
                 TokenInfo::new(Token::FloatLiteral(420.69), Place::new_full((1, 1), "420.69 17".to_owned())),
@@ -436,7 +453,7 @@ fn should_parse_number_literals() {
 
 #[test]
 fn should_parse_boolean_literals() {
-    assert_eq!(lex_content("true false".to_owned()), 
+    assert_eq!(lex_content("true false".to_owned()),
         Ok(vec![
             (vec![
                 TokenInfo::new(Token::BooleanLiteral(true), Place::new_full((1, 1), "true false".to_owned())),
@@ -449,7 +466,7 @@ fn should_parse_boolean_literals() {
 #[test]
 fn should_parse_operators() {
     let expected = vec![
-            (vec![  
+            (vec![
                 TokenInfo::new(Token::Operator(Operator::Eq), Place::new_full((1, 1), "==".to_owned())),
             ], "==".to_owned()),
             (vec![
