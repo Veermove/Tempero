@@ -1,6 +1,6 @@
 mod lex;
 mod parse;
-mod typedExpr;
+mod typecheck;
 mod eval;
 
 use std::{fs::File, io::{self, Read}};
@@ -9,31 +9,64 @@ use std::{fs::File, io::{self, Read}};
 
 use lex::*;
 use parse::*;
-use typedExpr::*;
+use typecheck::*;
+
+use crate::eval::eval_exp;
+
+
+fn log_ok<T>(v: Result<T, String>) -> Option<T> {
+    if let Ok(val) = v {
+        Some(val)
+    } else if let Err(val) = v {
+        println!("{}", val);
+        None
+    } else {
+        unreachable!()
+    }
+}
 
 fn main() {
     let mut buffer = String::new();
     print!(">");
-    while let Ok(_) = io::stdin().read_line(&mut buffer) {
+    'simul: while let Ok(_) = io::stdin().read_line(&mut buffer) {
         print!(">");
-        let tokens = lex_content_simple(buffer.drain(0..).collect());
-        if let Ok(cont) = tokens {
-            let (asts, _, errors) = parse::prase_expressions(cont);
-            for t in &asts {
-                dbg!(&t);
+        let tokens = {
+            let t = lex_content_simple(buffer.drain(0..).collect());
+            if t.is_err() {
+                continue 'simul;
             }
-            assert!(errors.is_empty());
-            let asts = asts.into_iter()
-                .map(typedExpr::TExpression::new)
-                .map(|r| r.unwrap())
-                .collect::<Vec<TExpression>>();
+            t.unwrap()
+        };
 
-            for t in asts {
-                dbg!(&t);
+            let (asts, _, errors) = parse::prase_expressions(tokens);
+            if !errors.is_empty() {
+                for er in errors {
+                    println!("{}", er);
+                    continue 'simul;
+                }
             }
-        }
 
-        buffer.drain(0..);
+            for exp in asts {
+                let typed_expr = {
+                    let t = typecheck::TExpression::new(exp);
+                    if let Err(v) = &t {
+                        println!("{}", v);
+                        continue 'simul;
+                    }
+                    t.unwrap()
+                };
+
+                let evaluated = {
+                    let t = eval_exp(&typed_expr.expression);
+                    if let Err(v) = &t {
+                        println!("{}", v);
+                        continue 'simul;
+                    }
+                    t.unwrap()
+                };
+
+                println!("{}", &evaluated);
+            }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::lex::{TokenInfo, Token, Operator, self};
+use crate::lex::{TokenInfo, Token, Operator, self, Literal};
 
 pub fn prase_expressions(expression_tokens: Vec<TokenInfo>) -> (Vec<Expression>, usize, Vec<String>) {
     let mut exps = Vec::new();
@@ -184,7 +184,7 @@ fn parse_factors(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, u
     'outer: loop {
         let current_token = tokens.get(current_index);
         // if seeing those operators
-        if let Some(Token::Operator(Multip | Div | Shl | Shr)) = current_token.map(|t| &t.token) {
+        if let Some(Token::Operator(Multip | Div | Shl | Shr | Modulo)) = current_token.map(|t| &t.token) {
             let operator = &current_token.expect("Unr!").token;
             // scan again at lower levels, RETURNING when seeing Multip or Div operator
             let parse_res = prase_unary(tokens, current_index + 1)?;
@@ -221,10 +221,10 @@ fn prase_unary(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, usi
 fn prase_primary(tokens: &Vec<TokenInfo>, index: usize) -> Result<(Expression, usize), String> {
     let current_token = tokens.get(index);
     match current_token.map(|t| &t.token) {
-        Some(Token::BooleanLiteral(_))
-        | Some(Token::FloatLiteral(_))
-        | Some(Token::IntegerLiteral(_))
-        | Some(Token::StringLiteral(_)) => {
+        Some(Token::Literal(Literal::Boolean(_)))
+        | Some(Token::Literal(Literal::Float(_)))
+        | Some(Token::Literal(Literal::Integer(_)))
+        | Some(Token::Literal(Literal::String(_))) => {
             let token = &current_token.expect("Unr!").token;
             return Ok((Expression::Literal(token.clone()), index + 1))
         },
@@ -290,7 +290,7 @@ fn find_next_start(tokens: &Vec<TokenInfo>, index: usize) -> usize {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{lex::{TokenInfo, Place, Token, Keyword, Operator, self}, Expression, parse::{start_parse, find_next_start}};
+    use crate::{lex::{TokenInfo, Place, Token, Keyword, Operator, self, Literal}, Expression, parse::{start_parse, find_next_start}};
 
 
 
@@ -298,22 +298,22 @@ mod tests {
 fn should_parse_literals_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Literal(Token::BooleanLiteral(true)), 1)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Literal(Token::Literal(Literal::Boolean(true))), 1)), "Ungrouped");
 
     let tokens = vec![
         TokenInfo::new(Token::Operator(Operator::OpParenth), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::CloParenth), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Grouping(Box::new(Expression::Literal(Token::BooleanLiteral(true)))), 3)), "Grouped");
+    assert_eq!(res, Ok((Expression::Grouping(Box::new(Expression::Literal(Token::Literal(Literal::Boolean(true))))), 3)), "Grouped");
 }
 
 #[test]
@@ -321,18 +321,18 @@ fn should_parse_unary_operator_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
         TokenInfo::new(Token::Operator(Operator::Not), place.clone()),
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
     assert_eq!(res, Ok((Expression::Unary(
-        Token::Operator(Operator::Not), Box::new(Expression::Literal(Token::FloatLiteral(1.0)))), 2)), "Ungrouped");
+        Token::Operator(Operator::Not), Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0))))), 2)), "Ungrouped");
 
     let tokens = vec![
         TokenInfo::new(Token::Operator(Operator::Minus), place.clone()),
         TokenInfo::new(Token::Operator(Operator::OpParenth), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::CloParenth), place.clone()),
     ];
 
@@ -341,7 +341,7 @@ fn should_parse_unary_operator_lvl_grouped_ungrouped() {
     assert_eq!(res, Ok(
         (Expression::Unary(
             Token::Operator(Operator::Minus),
-            Box::new(Expression::Grouping(Box::new(Expression::Literal(Token::BooleanLiteral(true)))))),
+            Box::new(Expression::Grouping(Box::new(Expression::Literal(Token::Literal(Literal::Boolean(true))))))),
         4)
         ), "Grouped");
 }
@@ -350,15 +350,15 @@ fn should_parse_unary_operator_lvl_grouped_ungrouped() {
 fn should_parse_factor_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::Multip), place.clone()),
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::FloatLiteral(1.0))),
-        Token::Operator(Operator::Multip), Box::new(Expression::Literal(Token::FloatLiteral(1.0)))), 3)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0)))),
+        Token::Operator(Operator::Multip), Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0))))), 3)), "Ungrouped");
 
     let expr = "!(-1 * 2) / 3".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -372,20 +372,20 @@ fn should_parse_factor_lvl_grouped_ungrouped() {
                     Token::Operator(Not),
                     Box::new(Expression::Grouping(
                         Box::new(Expression::Binary(
-                            Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::IntegerLiteral(1))))),
+                            Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::Literal(Literal::Integer(1)))))),
                             Token::Operator(Multip),
-                            Box::new(Expression::Literal(Token::IntegerLiteral(2)))))
+                            Box::new(Expression::Literal(Token::Literal(Literal::Integer(2))))))
                     ))
                 )),
                 Token::Operator(Div),
-                Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
             ),
             9))
         , "Grouped and nested")
     }
     //
 
-    // assert_eq!(res, Ok((Expression::Grouping(Box::new(Expression::Literal(Token::BooleanLiteral(true)))), 3)), "Grouped");
+    // assert_eq!(res, Ok((Expression::Grouping(Box::new(Expression::Literal(Token::Literal(Literal::Boolean(true))))), 3)), "Grouped");
 }
 
 #[test]
@@ -397,29 +397,29 @@ fn should_parse_tuples() {
     let expected = vec![
         Ok((
             Tuple(vec![
-                Literal(Token::IntegerLiteral(1)),
-                Literal(Token::BooleanLiteral(true)),
+                Literal(Token::Literal(crate::Literal::Integer(1))),
+                Literal(Token::Literal(crate::Literal::Boolean(true))),
                 Unary(
                     Token::Operator(Operator::Not),
                     Box::new(Grouping(Box::new(Binary(
-                        Box::new(Literal(Token::BooleanLiteral(false))),
+                        Box::new(Literal(Token::Literal(crate::Literal::Boolean(false)))),
                         Token::Operator(Operator::Or),
-                        Box::new(Literal(Token::BooleanLiteral(true)))
+                        Box::new(Literal(Token::Literal(crate::Literal::Boolean(true))))
                     ))))
                 ),
-                Tuple(vec![Literal(Token::IntegerLiteral(1)), Literal(Token::IntegerLiteral(2))]),
+                Tuple(vec![Literal(Token::Literal(crate::Literal::Integer(1))), Literal(Token::Literal(crate::Literal::Integer(2)))]),
                 Binary(
-                    Box::new(Literal(Token::IntegerLiteral(1))),
+                    Box::new(Literal(Token::Literal(crate::Literal::Integer(1)))),
                     Token::Operator(Operator::Plus),
-                    Box::new(Literal(Token::IntegerLiteral(2)))
+                    Box::new(Literal(Token::Literal(crate::Literal::Integer(2))))
                 )
             ]),
         22)),
         Ok((
             Tuple(vec![
-                Literal(Token::IntegerLiteral(1)),
-                Grouping(Box::new(Literal(Token::IntegerLiteral(2)))),
-                Grouping(Box::new(Tuple(vec![Literal(Token::IntegerLiteral(2)), Literal(Token::IntegerLiteral(3))]))),
+                Literal(Token::Literal(crate::Literal::Integer(1))),
+                Grouping(Box::new(Literal(Token::Literal(crate::Literal::Integer(2))))),
+                Grouping(Box::new(Tuple(vec![Literal(Token::Literal(crate::Literal::Integer(2))), Literal(Token::Literal(crate::Literal::Integer(3)))]))),
             ]),
         15))
     ];
@@ -436,15 +436,15 @@ fn should_parse_tuples() {
 fn should_parse_addition_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::FloatLiteral(1.0))),
-        Token::Operator(Operator::Plus), Box::new(Expression::Literal(Token::FloatLiteral(1.0)))), 3)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0)))),
+        Token::Operator(Operator::Plus), Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0))))), 3)), "Ungrouped");
 
     let expr = "!(-1 * 2 - 3) / 3 + 1".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -459,18 +459,18 @@ fn should_parse_addition_lvl_grouped_ungrouped() {
                         Token::Operator(Not),
                         Box::new(Expression::Grouping(Box::new(Expression::Binary(
                             Box::new(Expression::Binary(
-                                Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::IntegerLiteral(1))))),
+                                Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::Literal(Literal::Integer(1)))))),
                                 Token::Operator(Multip),
-                                Box::new(Expression::Literal(Token::IntegerLiteral(2))))),
+                                Box::new(Expression::Literal(Token::Literal(Literal::Integer(2)))))),
                             Token::Operator(Minus),
-                            Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                            Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                         ))))
                     )),
                     Token::Operator(Div),
-                    Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                 )),
                 Token::Operator(Plus),
-                Box::new(Expression::Literal(Token::IntegerLiteral(1)))
+                Box::new(Expression::Literal(Token::Literal(Literal::Integer(1))))
             ),
             13))
         , "Grouped and nested")
@@ -481,15 +481,15 @@ fn should_parse_addition_lvl_grouped_ungrouped() {
 fn should_parse_comparison_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::GreaterEq), place.clone()),
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::FloatLiteral(1.0))),
-        Token::Operator(Operator::GreaterEq), Box::new(Expression::Literal(Token::FloatLiteral(1.0)))), 3)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0)))),
+        Token::Operator(Operator::GreaterEq), Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0))))), 3)), "Ungrouped");
 
     let expr = "!(-1 * 2 - 3) / 3 + 1 > (0 <= 3 < 1) ".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -505,28 +505,28 @@ fn should_parse_comparison_lvl_grouped_ungrouped() {
                             Token::Operator(Not),
                             Box::new(Expression::Grouping(Box::new(Expression::Binary(
                                 Box::new(Expression::Binary(
-                                    Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::IntegerLiteral(1))))),
+                                    Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::Literal(Literal::Integer(1)))))),
                                     Token::Operator(Multip),
-                                    Box::new(Expression::Literal(Token::IntegerLiteral(2))))),
+                                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(2)))))),
                                 Token::Operator(Minus),
-                                Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                                Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                             ))))
                         )),
                         Token::Operator(Div),
-                        Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                        Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                     )),
                     Token::Operator(Plus),
-                    Box::new(Expression::Literal(Token::IntegerLiteral(1)))
+                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(1))))
                 )),
                 Token::Operator(Greater),
                 Box::new(Expression::Grouping(Box::new(Expression::Binary(
                     Box::new(Expression::Binary(
-                        Box::new(Expression::Literal(Token::IntegerLiteral(0))),
+                        Box::new(Expression::Literal(Token::Literal(Literal::Integer(0)))),
                         Token::Operator(LesserEq),
-                        Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                        Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                     )),
                     Token::Operator(Lesser),
-                    Box::new(Expression::Literal(Token::IntegerLiteral(1)))
+                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(1))))
                 ))))
             ),
             21))
@@ -538,15 +538,15 @@ fn should_parse_comparison_lvl_grouped_ungrouped() {
 fn should_parse_eq_neq_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::Neq), place.clone()),
-        TokenInfo::new(Token::FloatLiteral(1.0), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Float(1.0)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::FloatLiteral(1.0))),
-        Token::Operator(Operator::Neq), Box::new(Expression::Literal(Token::FloatLiteral(1.0)))), 3)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0)))),
+        Token::Operator(Operator::Neq), Box::new(Expression::Literal(Token::Literal(Literal::Float(1.0))))), 3)), "Ungrouped");
 
     let expr = "!(-1 * 2 - 3) / 3 + 1 == (0 <= 3 < 1 != 13 * 14) ".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -562,36 +562,36 @@ fn should_parse_eq_neq_lvl_grouped_ungrouped() {
                             Token::Operator(Not),
                             Box::new(Expression::Grouping(Box::new(Expression::Binary(
                                 Box::new(Expression::Binary(
-                                    Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::IntegerLiteral(1))))),
+                                    Box::new(Expression::Unary(Token::Operator(Minus), Box::new(Expression::Literal(Token::Literal(Literal::Integer(1)))))),
                                     Token::Operator(Multip),
-                                    Box::new(Expression::Literal(Token::IntegerLiteral(2))))),
+                                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(2)))))),
                                 Token::Operator(Minus),
-                                Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                                Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                             ))))
                         )),
                         Token::Operator(Div),
-                        Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                        Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                     )),
                     Token::Operator(Plus),
-                    Box::new(Expression::Literal(Token::IntegerLiteral(1)))
+                    Box::new(Expression::Literal(Token::Literal(Literal::Integer(1))))
                 )),
                 Token::Operator(Eq),
                 Box::new(Expression::Grouping(
                     Box::new(Expression::Binary(
                         Box::new(Expression::Binary(
                             Box::new(Expression::Binary(
-                                Box::new(Expression::Literal(Token::IntegerLiteral(0))),
+                                Box::new(Expression::Literal(Token::Literal(Literal::Integer(0)))),
                                 Token::Operator(LesserEq),
-                                Box::new(Expression::Literal(Token::IntegerLiteral(3)))
+                                Box::new(Expression::Literal(Token::Literal(Literal::Integer(3))))
                             )),
                             Token::Operator(Lesser),
-                            Box::new(Expression::Literal(Token::IntegerLiteral(1)))
+                            Box::new(Expression::Literal(Token::Literal(Literal::Integer(1))))
                         )),
                         Token::Operator(Neq),
                         Box::new(Expression::Binary(
-                            Box::new(Expression::Literal(Token::IntegerLiteral(13))),
+                            Box::new(Expression::Literal(Token::Literal(Literal::Integer(13)))),
                             Token::Operator(Multip),
-                            Box::new(Expression::Literal(Token::IntegerLiteral(14)))
+                            Box::new(Expression::Literal(Token::Literal(Literal::Integer(14))))
                         ))
                     )
                 )))
@@ -605,15 +605,15 @@ fn should_parse_eq_neq_lvl_grouped_ungrouped() {
 fn should_parse_ors_ands_lvl_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Operator(Operator::And), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
-    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::BooleanLiteral(true))),
-        Token::Operator(Operator::And), Box::new(Expression::Literal(Token::BooleanLiteral(true)))), 3)), "Ungrouped");
+    assert_eq!(res, Ok((Expression::Binary(Box::new(Expression::Literal(Token::Literal(Literal::Boolean(true)))),
+        Token::Operator(Operator::And), Box::new(Expression::Literal(Token::Literal(Literal::Boolean(true))))), 3)), "Ungrouped");
 
     let expr = "!(true || false && true) || true && false ".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -626,20 +626,20 @@ fn should_parse_ors_ands_lvl_grouped_ungrouped() {
             Box::new(Unary(
                 Operator(lex::Operator::Not),
                 Box::new(Grouping(Box::new(Binary(
-                    Box::new(Literal(BooleanLiteral(true))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true)))),
                     Operator(lex::Operator::Or),
                     Box::new(Binary(
-                        Box::new(Literal(BooleanLiteral(false))),
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false)))),
                         Operator(lex::Operator::And),
-                        Box::new(Literal(BooleanLiteral(true)))
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true))))
                     ))
                 ))))
             )),
             Operator(lex::Operator::Or),
             Box::new(Binary(
-                Box::new(Literal(BooleanLiteral(true))),
+                Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true)))),
                 Operator(lex::Operator::And),
-                Box::new(Literal(BooleanLiteral(false)))
+                Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false))))
             ))
         ), 12)))
     }
@@ -649,19 +649,19 @@ fn should_parse_ors_ands_lvl_grouped_ungrouped() {
 fn should_parse_conditional_expression_grouped_ungrouped() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(crate::Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Operator(lex::Operator::IfExpr), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(false), place.clone()),
+        TokenInfo::new(Token::Literal(crate::Literal::Boolean(false)), place.clone()),
         TokenInfo::new(Token::Operator(lex::Operator::ElseExpr), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(false), place.clone()),
+        TokenInfo::new(Token::Literal(crate::Literal::Boolean(false)), place.clone()),
     ];
 
     let res = start_parse(&tokens, 0);
 
     use Expression::*;
     use Token::*;
-    assert_eq!(res, Ok((Conditional(Box::new(Literal(BooleanLiteral(true))),
-        Box::new(Literal(BooleanLiteral(false))), Box::new(Literal(BooleanLiteral(false)))), 5)), "Ungrouped");
+    assert_eq!(res, Ok((Conditional(Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true)))),
+        Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false)))), Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false))))), 5)), "Ungrouped");
 
     let expr = "!(true || false && true) ? 1 + 2 * 3 : 1 < 2 == false".to_owned();
     let lex_res = lex::lex_content(expr).unwrap();
@@ -673,32 +673,32 @@ fn should_parse_conditional_expression_grouped_ungrouped() {
                 Box::new(Unary(
                     Operator(lex::Operator::Not),
                     Box::new(Grouping(Box::new(Binary(
-                        Box::new(Literal(BooleanLiteral(true))),
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true)))),
                         Operator(lex::Operator::Or),
                         Box::new(Binary(
-                            Box::new(Literal(BooleanLiteral(false))),
+                            Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false)))),
                             Operator(lex::Operator::And),
-                            Box::new(Literal(BooleanLiteral(true)))
+                            Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true))))
                         ))
                     ))))
                 )),
                 Box::new(Binary(
-                    Box::new(Literal(IntegerLiteral(1))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(1)))),
                     Operator(lex::Operator::Plus),
                     Box::new(Binary(
-                        Box::new(Literal(IntegerLiteral(2))),
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(2)))),
                         Operator(lex::Operator::Multip),
-                        Box::new(Literal(IntegerLiteral(3)))
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(3))))
                     ))
                 )),
                 Box::new(Binary(
                     Box::new(Binary(
-                        Box::new(Literal(IntegerLiteral(1))),
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(1)))),
                         Operator(lex::Operator::Lesser),
-                        Box::new(Literal(IntegerLiteral(2)))
+                        Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(2))))
                     )),
                     Operator(lex::Operator::Eq),
-                    Box::new(Literal(BooleanLiteral(false)))
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(false))))
                 )),
             )
         , 20)))
@@ -716,16 +716,16 @@ fn should_parse_nested_conditional_expressions() {
         let res = start_parse(&r, 0);
         assert_eq!(res, Ok((
             Conditional(
-                Box::new(Literal(IntegerLiteral(1))),
+                Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(1)))),
                 Box::new(Grouping(Box::new(Conditional(
-                    Box::new(Literal(BooleanLiteral(true))),
-                    Box::new(Literal(IntegerLiteral(0))),
-                    Box::new(Literal(IntegerLiteral(2))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Boolean(true)))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(0)))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(2)))),
                 )))),
                 Box::new(Conditional(
-                    Box::new(Binary(Box::new(Literal(IntegerLiteral(1))), Operator(lex::Operator::Eq), Box::new(Literal(IntegerLiteral(2))))),
-                    Box::new(Literal(IntegerLiteral(200))),
-                    Box::new(Literal(IntegerLiteral(400))),
+                    Box::new(Binary(Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(1)))), Operator(lex::Operator::Eq), Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(2)))))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(200)))),
+                    Box::new(Expression::Literal(Token::Literal(crate::Literal::Integer(400)))),
                 )),
             )
         , 17)))
@@ -736,15 +736,15 @@ fn should_parse_nested_conditional_expressions() {
 fn sohuld_find_next_expression_start() {
     let place = Place::new((0, 0));
     let tokens = vec![
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Keyword(Keyword::Let), place.clone()),
         TokenInfo::new(Token::Operator(Operator::Semicolon), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
-        TokenInfo::new(Token::BooleanLiteral(true), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
+        TokenInfo::new(Token::Literal(Literal::Boolean(true)), place.clone()),
         TokenInfo::new(Token::Eof, place.clone()),
     ];
 
@@ -757,20 +757,20 @@ fn sohuld_find_next_expression_start() {
 // fn sohuld_parse_expression_and_expect_panic() {
 //     let place = Place::new((0, 0));
 //     let tokens = vec![
-//         // TokenInfo::new(Token::IntegerLiteral(1), place.clone()),
+//         // TokenInfo::new(Token::Literal(Literal::Integer(1)), place.clone()),
 //         // TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-//         // TokenInfo::new(Token::IntegerLiteral(2), place.clone()),
+//         // TokenInfo::new(Token::Literal(Literal::Integer(2)), place.clone()),
 //         // TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-//         TokenInfo::new(Token::IntegerLiteral(3), place.clone()),
+//         TokenInfo::new(Token::Literal(Literal::Integer(3)), place.clone()),
 //         TokenInfo::new(Token::Keyword(Keyword::Let), place.clone()),
-//         TokenInfo::new(Token::IntegerLiteral(4), place.clone()),
+//         TokenInfo::new(Token::Literal(Literal::Integer(4)), place.clone()),
 //         TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-//         TokenInfo::new(Token::IntegerLiteral(4), place.clone()),
+//         TokenInfo::new(Token::Literal(Literal::Integer(4)), place.clone()),
 //         TokenInfo::new(Token::Operator(Operator::Semicolon), place.clone()),
 //         // line 1: 1 + 2 + 3 let + 4; 13 + 13
-//         TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
+//         TokenInfo::new(Token::Literal(Literal::Integer(13)), place.clone()),
 //         TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-//         TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
+//         TokenInfo::new(Token::Literal(Literal::Integer(13)), place.clone()),
 //     ];
 
 //     let (res_e, ind, s) = prase_expression(tokens);
@@ -778,9 +778,9 @@ fn sohuld_find_next_expression_start() {
 //     assert_eq!(
 //         res_e,
 //         vec![Expression::Binary(
-//             Box::new(Expression::Literal(Token::IntegerLiteral(13))),
+//             Box::new(Expression::Literal(Token::Literal(Literal::Integer(13)))),
 //             Token::Operator(Operator::Plus),
-//             Box::new(Expression::Literal(Token::IntegerLiteral(13)))
+//             Box::new(Expression::Literal(Token::Literal(Literal::Integer(13))))
 //         )]
 //     );
 //     assert_eq!(ind, 12);

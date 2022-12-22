@@ -1,4 +1,4 @@
-use crate::{lex::{Operator, Token}, parse::Expression};
+use crate::{lex::{Operator, Token, Literal}, parse::Expression};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,10 +80,10 @@ pub fn find_expression_type(expr: &Expression) -> Result<Type, String> {
 
 fn find_type_for_literal(token: &Token) -> Result<Type, String> {
     match token {
-        Token::FloatLiteral(_) => Ok(Type::Float),
-        Token::IntegerLiteral(_) => Ok(Type::Int),
-        Token::BooleanLiteral(_) => Ok(Type::Bool),
-        Token::StringLiteral(_) => Ok(Type::String),
+        Token::Literal(Literal::Float(_)) => Ok(Type::Float),
+        Token::Literal(Literal::Integer(_)) => Ok(Type::Int),
+        Token::Literal(Literal::Boolean(_)) => Ok(Type::Bool),
+        Token::Literal(Literal::String(_)) => Ok(Type::String),
         _ => Err("Can't find type for this token".to_owned())
     }
 }

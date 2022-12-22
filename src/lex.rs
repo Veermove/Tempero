@@ -1,11 +1,9 @@
+use std::fmt::Display;
+
 // TODO: Move literals to separate enum and introduce Tuple Literal
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    FloatLiteral(f64),
-    IntegerLiteral(i64),
-    BooleanLiteral(bool),
-    StringLiteral(String),
-
+    Literal(Literal),
     Identifier(String),
     Keyword(Keyword),
     Operator(Operator),
@@ -19,6 +17,17 @@ pub enum Literal {
     Integer(i64),
     Boolean(bool),
     String(String),
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Float(v) => write!(f, "{}", v),
+            Literal::Integer(v) => write!(f, "{}", v),
+            Literal::Boolean(v) => write!(f, "{}", v),
+            Literal::String(v) => write!(f, "{}", v),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -160,7 +169,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                         }
                     }
 
-                    tokens.push(TokenInfo::new(Token::StringLiteral(literal_buffor.iter().collect()), place.clone()));
+                    tokens.push(TokenInfo::new(Token::Literal(Literal::String(literal_buffor.iter().collect())), place.clone()));
                 },
                 '0'..='9' => {
                     let mut literal_buffor = Vec::new();
@@ -181,7 +190,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                                 .collect::<String>()
                                 .parse::<f64>();
                             if f_literal.is_ok() {
-                                tokens.push(TokenInfo::new(Token::FloatLiteral(f_literal.expect("Unr!")), place));
+                                tokens.push(TokenInfo::new(Token::Literal(Literal::Float(f_literal.expect("Unr!"))), place));
                             } else {
                                 report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()))
                             }
@@ -192,7 +201,7 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                                 .collect::<String>()
                                 .parse::<i64>();
                             if f_literal.is_ok() {
-                                tokens.push(TokenInfo::new(Token::IntegerLiteral(f_literal.expect("Unr!")), place));
+                                tokens.push(TokenInfo::new(Token::Literal(Literal::Integer(f_literal.expect("Unr!"))), place));
                             } else {
                                 report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()))
                             };
@@ -221,8 +230,8 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                         "if"    => Token::Keyword(Keyword::If),
                         "else"  => Token::Keyword(Keyword::Else),
                         "func"  => Token::Keyword(Keyword::Func),
-                        "true"  => Token::BooleanLiteral(true),
-                        "false" => Token::BooleanLiteral(false),
+                        "true"  => Token::Literal(Literal::Boolean(true)),
+                        "false" => Token::Literal(Literal::Boolean(false)),
                         _       => Token::Identifier(idenf),
                     };
                     tokens.push(TokenInfo::new(token, place));
@@ -421,7 +430,7 @@ fn should_lex_string_literal() {
     assert_eq!(lex_content("\"ESSA\"".to_owned()),
         Ok(vec![
             (vec![
-                (TokenInfo::new(Token::StringLiteral("ESSA".to_owned()), Place::new_full((1, 1), "\"ESSA\"".to_owned())))
+                (TokenInfo::new(Token::Literal(Literal::String("ESSA".to_owned())), Place::new_full((1, 1), "\"ESSA\"".to_owned())))
             ], "\"ESSA\"".to_owned())
         ])
     )
@@ -443,8 +452,8 @@ fn should_parse_number_literals() {
     assert_eq!(lex_content("420.69 17".to_owned()),
         Ok(vec![
             (vec![
-                TokenInfo::new(Token::FloatLiteral(420.69), Place::new_full((1, 1), "420.69 17".to_owned())),
-                TokenInfo::new(Token::IntegerLiteral(17), Place::new_full((1, 8), "420.69 17".to_owned()))
+                TokenInfo::new(Token::Literal(Literal::Float(420.69)), Place::new_full((1, 1), "420.69 17".to_owned())),
+                TokenInfo::new(Token::Literal(Literal::Integer(17)), Place::new_full((1, 8), "420.69 17".to_owned()))
             ], "420.69 17".to_owned())
         ])
     )
@@ -456,8 +465,8 @@ fn should_parse_boolean_literals() {
     assert_eq!(lex_content("true false".to_owned()),
         Ok(vec![
             (vec![
-                TokenInfo::new(Token::BooleanLiteral(true), Place::new_full((1, 1), "true false".to_owned())),
-                TokenInfo::new(Token::BooleanLiteral(false), Place::new_full((1, 6), "true false".to_owned()))
+                TokenInfo::new(Token::Literal(Literal::Boolean(true)), Place::new_full((1, 1), "true false".to_owned())),
+                TokenInfo::new(Token::Literal(Literal::Boolean(false)), Place::new_full((1, 6), "true false".to_owned()))
             ], "true false".to_owned())
         ])
     )
