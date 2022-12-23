@@ -13,21 +13,8 @@ use typecheck::*;
 
 use crate::eval::eval_exp;
 
-
-fn log_ok<T>(v: Result<T, String>) -> Option<T> {
-    if let Ok(val) = v {
-        Some(val)
-    } else if let Err(val) = v {
-        println!("{}", val);
-        None
-    } else {
-        unreachable!()
-    }
-}
-
 fn main() {
     let mut buffer = String::new();
-    print!(">");
     'simul: while let Ok(_) = io::stdin().read_line(&mut buffer) {
         print!(">");
         let tokens = {
@@ -69,40 +56,6 @@ fn main() {
             }
     }
 }
-
-fn main1() {
-    // let place = Place::new((0, 0));
-    // let tokens = vec![
-    //     TokenInfo::new(Token::IntegerLiteral(1), place.clone()),
-    //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-    //     TokenInfo::new(Token::IntegerLiteral(2), place.clone()),
-    //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-    //     TokenInfo::new(Token::IntegerLiteral(3), place.clone()),
-    //     TokenInfo::new(Token::Keyword(Keyword::Let), place.clone()),
-    //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-    //     TokenInfo::new(Token::IntegerLiteral(4), place.clone()),
-    //     TokenInfo::new(Token::Operator(Operator::Semicolon), place.clone()),
-    //     // line 1: 1 + 1 + 1 let + 1;
-    //     // line 2: 1 + 1;
-    //     TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
-    //     TokenInfo::new(Token::Operator(Operator::Plus), place.clone()),
-    //     TokenInfo::new(Token::IntegerLiteral(13), place.clone()),
-    // ];
-
-    // // let (res_e, ind, s) = prase_expression(tokens);
-    // dbg!(&res_e, ind, &s);
-    // assert_eq!(
-    //     res_e,
-    //     vec![Expression::Binary(
-    //         Box::new(Expression::Literal(Token::IntegerLiteral(13))),
-    //         Token::Operator(Operator::Plus),
-    //         Box::new(Expression::Literal(Token::IntegerLiteral(13)))
-    //     )]
-    // );
-    // assert_eq!(ind, 12);
-    // assert_eq!(s.len(), 2);
-}
-
 
 fn main2() -> std::io::Result<()> {
     // let mut file = File::open("./add_ex.tm")?;

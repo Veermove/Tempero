@@ -1,4 +1,8 @@
-use crate::{lex::{Literal, Token, Operator}, parse::Expression, typecheck::find_expression_type};
+use crate::{
+    lex::{Literal, Token, Operator},
+    parse::Expression,
+    typecheck::find_expression_type
+};
 
 pub fn eval_exp(exp: &Expression) -> Result<Literal, String> {
 
@@ -140,6 +144,7 @@ fn eval_plus(left: &Expression, right: &Expression) -> Result<Literal, String> {
         (Ok(Literal::Float(l)), Ok(Literal::Integer(r))) => Ok(Literal::Float(l + r as f64)),
         (Ok(Literal::Integer(l)), Ok(Literal::Integer(r))) => Ok(Literal::Integer(l + r)),
         (Ok(Literal::Float(l)), Ok(Literal::Float(r))) => Ok(Literal::Float(l + r)),
+        (Ok(Literal::String(l)), Ok(Literal::String(r))) => Ok(Literal::String(format!("{}{}", l, r))),
         (_, _) => Err(format!("Type mismatch for +, expected Float or Integer, but got {:?}", vec![l_t?, r_t?] )),
     }
 }

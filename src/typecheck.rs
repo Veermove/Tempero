@@ -35,10 +35,10 @@ pub fn find_expression_type(expr: &Expression) -> Result<Type, String> {
                 if allowed_operators.contains(op) {
                     Ok(actual)
                 } else {
-                    Err(format!("Opperator {:?} is not supported for expression of type: {:?}.", operator, actual))
+                    Err(format!("{:?} is not supported for expression of type: {:?}.", operator, actual))
                 }
             } else {
-                Err(format!("Opperator {:?} is not a valid unary operator.", operator))
+                Err(format!("{:?} is not a valid unary operator.", operator))
             }
         },
         Expression::Binary(left, operator, right) => {
@@ -50,10 +50,10 @@ pub fn find_expression_type(expr: &Expression) -> Result<Type, String> {
                 if allowed_operators.contains(op) {
                     Ok(find_type_produced_by_bin_operator(op, &actual_l, &actual_r))
                 } else {
-                    Err(format!("Opperator {:?} is not supported for types: {:?} {:?} {:?}.", operator, actual_l, operator, actual_r))
+                    Err(format!("{:?} is not supported for types: {:?} [{:?}] {:?}.", operator, actual_l, operator, actual_r))
                 }
             } else {
-                Err(format!("Opperator {:?} is not a valid binary operator.", operator))
+                Err(format!("{:?} is not a valid binary operator.", operator))
             }
         },
         Expression::Conditional(predicate, t, f) => {
@@ -65,7 +65,7 @@ pub fn find_expression_type(expr: &Expression) -> Result<Type, String> {
             if if_true == if_false {
                 return Ok(if_true);
             } else {
-                return Err(format!("Mismatched types - expressions in ?: operator must be of same type, <expr if true>: {:?}, <expr if false>: {:?}", if_true, if_false))
+                return Err(format!("Mismatched types - expressions in [?:] operator must be of same type, <expr if true>: {:?}, <expr if false>: {:?}", if_true, if_false))
             }
         },
         Expression::Tuple(exprs) => {
@@ -94,6 +94,11 @@ fn find_bin_operator_for_types(left: &Type, right: &Type) -> Vec<Operator> {
     if (left == &Type::Float || left == &Type::Int)
         && (right == &Type::Float || right == &Type::Int) {
         allowed_operators.append(&mut vec![Greater, GreaterEq, Lesser, LesserEq, Plus, Minus, Multip, Div]);
+    }
+    if left == &Type::String && right == &Type::String {
+        if !allowed_operators.contains(&Operator::Plus) {
+            allowed_operators.push(Operator::Plus)
+        }
     }
     if left == &Type::Int && right == &Type::Int {
         allowed_operators.append(&mut vec![Shl, Shr, Modulo, BitAnd, BitOr]);

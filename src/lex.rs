@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-// TODO: Move literals to separate enum and introduce Tuple Literal
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Literal(Literal),
