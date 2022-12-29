@@ -1,9 +1,8 @@
-"essa" == "izi" ? (132 ? 1 : 2) : 3;
-10.11 ? (132 ? 1 : 2) : 3;
-true ? 15 : "milion kurwa";
-1 + true
-1 + true;
+1 + a;
 
+// "essa" == "izi" ? (132 ? 1 : 2) : 3;
+// 10.11 ? (132 ? 1 : 2) : 3;
+// true ? 15 : "milion kurwa";
 //"essa" == "izi" ? (132 ? 1 : 2) : 3;
 //"twój stary";
 //"piwo" + "twój stary" == "wpierdol";

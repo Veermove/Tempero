@@ -4,12 +4,13 @@ mod typecheck;
 mod eval;
 mod stmtparse;
 
-use std::{fs::File, io::{self, Read}};
+use std::{fs::File, io::{self, Read}, collections::HashMap};
 
 
 
 use lex::*;
 use exprparse::*;
+use stmtparse::State;
 use typecheck::*;
 
 use crate::eval::eval_exp;
@@ -20,6 +21,7 @@ fn main() {
 
 fn interactive() {
     let mut buffer = String::new();
+    let mut state: State = HashMap::new();
     'simul: while let Ok(_) = io::stdin().read_line(&mut buffer) {
         print!(">");
         let tokens = {
@@ -40,7 +42,7 @@ fn interactive() {
 
             for exp in asts {
                 let typed_expr = {
-                    let t = typecheck::TExpression::new(exp);
+                    let t = typecheck::TExpression::new(exp, &state);
                     if let Err(v) = &t {
                         println!("{}", v);
                         continue 'simul;
@@ -49,7 +51,7 @@ fn interactive() {
                 };
 
                 let evaluated = {
-                    let t = eval_exp(&typed_expr.expression);
+                    let t = eval_exp(&typed_expr.expression, &state);
                     if let Err(v) = &t {
                         println!("{}", v);
                         continue 'simul;
