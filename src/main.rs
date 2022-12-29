@@ -1,19 +1,24 @@
 mod lex;
-mod parse;
+mod exprparse;
 mod typecheck;
 mod eval;
+mod stmtparse;
 
 use std::{fs::File, io::{self, Read}};
 
 
 
 use lex::*;
-use parse::*;
+use exprparse::*;
 use typecheck::*;
 
 use crate::eval::eval_exp;
 
 fn main() {
+    read_comp();
+}
+
+fn interactive() {
     let mut buffer = String::new();
     'simul: while let Ok(_) = io::stdin().read_line(&mut buffer) {
         print!(">");
@@ -22,10 +27,10 @@ fn main() {
             if t.is_err() {
                 continue 'simul;
             }
-            t.unwrap()
+            lex::to_simple_format(t.unwrap())
         };
 
-            let (asts, _, errors) = parse::prase_expressions(tokens);
+            let (asts, _, errors) = exprparse::prase_expressions(tokens);
             if !errors.is_empty() {
                 for er in errors {
                     println!("{}", er);
@@ -57,12 +62,27 @@ fn main() {
     }
 }
 
-fn main2() -> std::io::Result<()> {
-    // let mut file = File::open("./add_ex.tm")?;
-    // let mut content = String::new();
-    // file.read_to_string(&mut content)?;
+fn read_comp() -> std::io::Result<()> {
+    let mut file = File::open("./add_ex.tm")?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
 
-    // let tokens = lex::lex_content(content);
+
+
+    let (tokens, errors) = lex::lex_content(content);
+    if !errors.is_empty() {
+        println!("{}", errors.join("\n"));
+    }
+
+    let s_tokens = lex::to_simple_format(tokens);
+    let prog_statements = stmtparse::parse_program(s_tokens);
+    for p_stms in prog_statements {
+        if let Ok(prog) = p_stms {
+            println!("{}", prog);
+        } else if let Err(err) = p_stms {
+            println!("{}", err);
+        };
+    }
     // let ast = parse::prase_expressions(expression_tokens)
     Ok(())
 }

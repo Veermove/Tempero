@@ -1,4 +1,4 @@
-use crate::{lex::{Operator, Token, Literal}, parse::Expression};
+use crate::{lex::{Operator, Token, Literal}, exprparse::Expression};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,64 +18,63 @@ pub struct TExpression {
 
 impl TExpression {
     pub fn new(expr: Expression) -> Result<Self, String> {
-        Ok(TExpression { exprssion_type: find_expression_type(&expr)?, expression: expr })
+        Ok(TExpression {
+            exprssion_type: expr.get_type()?,
+            expression: expr
+        })
     }
 }
 
-pub fn find_expression_type(expr: &Expression) -> Result<Type, String> {
-    match expr {
-        Expression::Literal(token)
-            => find_type_for_literal(token),
-        Expression::Grouping(nested)
-            => find_expression_type(nested),
-        Expression::Unary(operator, expression) => {
-            let actual = find_expression_type(expression)?;
-            let allowed_operators = find_un_operator_for_types(&actual);
-            if let Token::Operator(op) = operator {
-                if allowed_operators.contains(op) {
+pub fn find_expression_type(expression: &Expression) -> Result<Type, String> {
+    fn find_exp_type_inner(expr: &Expression) -> Result<Type, String> {
+        match expr {
+            Expression::Literal(token)
+                => find_type_for_literal(token),
+            Expression::Grouping(nested)
+                => find_exp_type_inner(nested),
+            Expression::Unary(operator, expression) => {
+                let actual = find_exp_type_inner(expression)?;
+                let allowed_operators = find_un_operator_for_types(&actual);
+                if allowed_operators.contains(operator) {
                     Ok(actual)
                 } else {
                     Err(format!("{:?} is not supported for expression of type: {:?}.", operator, actual))
                 }
-            } else {
-                Err(format!("{:?} is not a valid unary operator.", operator))
-            }
-        },
-        Expression::Binary(left, operator, right) => {
-            let actual_l = find_expression_type(left)?;
-            let actual_r = find_expression_type(right)?;
-            let allowed_operators = find_bin_operator_for_types(&actual_l, &actual_r);
-
-            if let Token::Operator(op) = operator {
-                if allowed_operators.contains(op) {
-                    Ok(find_type_produced_by_bin_operator(op, &actual_l, &actual_r))
+            },
+            Expression::Binary(left, operator, right) => {
+                let actual_l = find_exp_type_inner(left)?;
+                let actual_r = find_exp_type_inner(right)?;
+                let allowed_operators = find_bin_operator_for_types(&actual_l, &actual_r);
+                if allowed_operators.contains(operator) {
+                    Ok(find_type_produced_by_bin_operator(operator, &actual_l, &actual_r))
                 } else {
                     Err(format!("{:?} is not supported for types: {:?} [{:?}] {:?}.", operator, actual_l, operator, actual_r))
                 }
-            } else {
-                Err(format!("{:?} is not a valid binary operator.", operator))
-            }
-        },
-        Expression::Conditional(predicate, t, f) => {
-            let p = find_expression_type(predicate)?;
-            if  p!= Type::Bool {
-                return Err(format!("Mismatched type - predicate in ?: operator must be of type Bool, not {:?}.", p))
-            };
-            let (if_true, if_false) = (find_expression_type(t)?, find_expression_type(f)?);
-            if if_true == if_false {
-                return Ok(if_true);
-            } else {
-                return Err(format!("Mismatched types - expressions in [?:] operator must be of same type, <expr if true>: {:?}, <expr if false>: {:?}", if_true, if_false))
-            }
-        },
-        Expression::Tuple(exprs) => {
-            let mut types = Vec::new();
-            for ex in exprs {
-                types.push(find_expression_type(ex)?);
-            }
-            return Ok(Type::Tuple(types));
-        },
+            },
+            Expression::Conditional(predicate, t, f) => {
+                let p = find_exp_type_inner(predicate)?;
+                if  p!= Type::Bool {
+                    return Err(format!("Mismatched type - predicate in ?: operator must be of type Bool, not {:?}.", p))
+                };
+                let (if_true, if_false) = (find_exp_type_inner(t)?, find_exp_type_inner(f)?);
+                if if_true == if_false {
+                    return Ok(if_true);
+                } else {
+                    return Err(format!("Mismatched types - expressions in [?:] operator must be of same type, but was Bool ? {:?} : {:?}", if_true, if_false))
+                }
+            },
+            Expression::Tuple(exprs) => {
+                let mut types = Vec::new();
+                for ex in exprs {
+                    types.push(find_exp_type_inner(ex)?);
+                }
+                return Ok(Type::Tuple(types));
+            },
+        }
     }
+
+    find_exp_type_inner(expression)
+        .map_err(|msg| format!("Error in expression: {}. {}", expression, msg))
 }
 
 fn find_type_for_literal(token: &Token) -> Result<Type, String> {
@@ -84,7 +83,7 @@ fn find_type_for_literal(token: &Token) -> Result<Type, String> {
         Token::Literal(Literal::Integer(_)) => Ok(Type::Int),
         Token::Literal(Literal::Boolean(_)) => Ok(Type::Bool),
         Token::Literal(Literal::String(_)) => Ok(Type::String),
-        _ => Err("Can't find type for this token".to_owned())
+        _ => Err(format!("Can't find type for token: {:?}", token))
     }
 }
 
@@ -142,51 +141,6 @@ fn find_type_produced_by_bin_operator(operator: &Operator, left: &Type, right: &
         Modulo => Int,
         _ => unimplemented!()
     }
-}
-
-fn find_expected_type_for_operator_token(token: &Token) -> Result<(Vec<Type>, Vec<Type>), String> {
-    // if let Token::Operator(operator) = token {
-    //     use Type::*;
-    //     match operator {
-    //         Operator::Eq => Ok((vec![Bool, Float, Int, String, Tuple(vec![])], Bool)),
-    //         Operator::Neq => Ok((vec![Float, Int, String, Tuple(vec![])], Bool)),
-    //         Operator::Greater => Ok((vec![Float, Int, String], Bool)),
-    //         Operator::GreaterEq => Ok((vec![Float, Int, String], Bool)),
-    //         Operator::Lesser => Ok((vec![Float, Int, String], Bool)),
-    //         Operator::LesserEq => Ok((vec![Float, Int, String], Bool)),
-    //         Operator::Plus => Ok((vec![Int, Float], )),
-    //         Operator::Minus => Ok((vec![Int, Float], )),
-    //         Operator::Multip => Ok((vec![Int, Float], )),
-    //         Operator::Div => Ok((vec![Int, Float], )),
-    //         Operator::Semicolon => todo(),
-    //         Operator::Not => Ok((vec![Bool], )),
-    //         Operator::And => Ok((vec![Bool], )),
-    //         Operator::Or => Ok((vec![Bool], )),
-    //         Operator::BitAnd => Ok((vec![Int], )),
-    //         Operator::BitOr => Ok((vec![Int], )),
-    //         Operator::Shl => Ok((vec![Int], )),
-    //         Operator::Shr => Ok((vec![Int], )),
-    //         Operator::Modulo => Ok((vec![Int], )),
-    //         Operator::Assign => todo!(),
-    //         Operator::AssingInc => todo!(),
-    //         Operator::AssignDec => todo!(),
-    //         Operator::AssignMul => todo!(),
-    //         Operator::AssignDiv => todo!(),
-    //         Operator::IfExpr => todo!(),
-    //         Operator::ElseExpr => todo!(),
-    //         Operator::ModStream => todo!(),
-    //         Operator::OpBrace => todo!(),
-    //         Operator::CloBrace => todo!(),
-    //         Operator::OpParenth => todo!(),
-    //         Operator::CloParenth => todo!(),
-    //         Operator::OpArr => todo!(),
-    //         Operator::CloArr => todo!(),
-    //         Operator::Separator => todo!(),
-    //     }
-    // } else {
-    //     Err("Can't infer type for this token".to_owned())
-    // }
-    unimplemented!()
 }
 
 pub trait Typed {

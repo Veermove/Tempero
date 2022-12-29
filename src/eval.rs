@@ -1,6 +1,6 @@
 use crate::{
     lex::{Literal, Token, Operator},
-    parse::Expression,
+    exprparse::Expression,
     typecheck::find_expression_type
 };
 
@@ -17,7 +17,7 @@ pub fn eval_exp(exp: &Expression) -> Result<Literal, String> {
             },
             Expression::Grouping(exp) => eval_exp(exp),
             Expression::Unary(op, expr) => match op {
-                Token::Operator(Operator::Not) => {
+                Operator::Not => {
                     let exp = eval_exp(expr)?;
                     if let Literal::Boolean(v) = exp {
                         Ok(Literal::Boolean(!v))
@@ -28,7 +28,7 @@ pub fn eval_exp(exp: &Expression) -> Result<Literal, String> {
                         ))
                     }
                 },
-                Token::Operator(Operator::Minus) => {
+                Operator::Minus => {
                     let exp = eval_exp(expr)?;
                     if let Literal::Integer(v) = exp {
                         Ok(Literal::Integer(-v))
@@ -44,23 +44,23 @@ pub fn eval_exp(exp: &Expression) -> Result<Literal, String> {
                 t =>  Err(format!("Mismatched token: {:?} is not a unary operator as expected.", t)),
             }
             Expression::Binary(left, op, right) => match op {
-                Token::Operator(Operator::Eq) => eval_eq(left, right),
-                Token::Operator(Operator::Neq) => eval_neq(left, right),
-                Token::Operator(Operator::Greater) => eval_greater(left, right),
-                Token::Operator(Operator::GreaterEq) => eval_greatereq(left, right),
-                Token::Operator(Operator::Lesser) => eval_lesser(left, right),
-                Token::Operator(Operator::LesserEq) => eval_lessereq(left, right),
-                Token::Operator(Operator::Plus) => eval_plus(left, right),
-                Token::Operator(Operator::Minus) => eval_minus(left, right),
-                Token::Operator(Operator::Multip) => eval_multip(left, right),
-                Token::Operator(Operator::Div) => eval_div(left, right),
-                Token::Operator(Operator::And) => eval_and(left, right),
-                Token::Operator(Operator::Or) => eval_or(left, right),
-                Token::Operator(Operator::BitAnd) => eval_bitand(left, right),
-                Token::Operator(Operator::BitOr) => eval_bitor(left, right),
-                Token::Operator(Operator::Shl) => eval_shl(left, right),
-                Token::Operator(Operator::Shr) => eval_shr(left, right),
-                Token::Operator(Operator::Modulo) => eval_modulo(left, right),
+                Operator::Eq => eval_eq(left, right),
+                Operator::Neq => eval_neq(left, right),
+                Operator::Greater => eval_greater(left, right),
+                Operator::GreaterEq => eval_greatereq(left, right),
+                Operator::Lesser => eval_lesser(left, right),
+                Operator::LesserEq => eval_lessereq(left, right),
+                Operator::Plus => eval_plus(left, right),
+                Operator::Minus => eval_minus(left, right),
+                Operator::Multip => eval_multip(left, right),
+                Operator::Div => eval_div(left, right),
+                Operator::And => eval_and(left, right),
+                Operator::Or => eval_or(left, right),
+                Operator::BitAnd => eval_bitand(left, right),
+                Operator::BitOr => eval_bitor(left, right),
+                Operator::Shl => eval_shl(left, right),
+                Operator::Shr => eval_shr(left, right),
+                Operator::Modulo => eval_modulo(left, right),
                 _ => Err(format!("Mismatched token: {:?} is not a binary operator as expected.", op)),
             }
             Expression::Conditional(predicate, te, fe) => {

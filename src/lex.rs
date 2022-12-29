@@ -18,17 +18,6 @@ pub enum Literal {
     String(String),
 }
 
-impl Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Literal::Float(v) => write!(f, "{}", v),
-            Literal::Integer(v) => write!(f, "{}", v),
-            Literal::Boolean(v) => write!(f, "{}", v),
-            Literal::String(v) => write!(f, "{}", v),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Operator {
 
@@ -89,49 +78,47 @@ pub enum Keyword {
     Func,
 }
 
-// TODO: Replace TokenInfo and Place for LineOfTokens,
-// so that Token does not store full line
-#[derive(Debug, Clone, PartialEq)]
-pub struct Place {
-    column: usize,
-    line: usize,
-    full_line: Option<String>,
-}
-
-impl Place {
-    pub fn new(line_column: (usize, usize)) -> Self {
-        Place { line: line_column.0, column: line_column.1, full_line: None }
-    }
-
-    pub fn new_full(line_column: (usize, usize), full_line: String) -> Self {
-        Place { line: line_column.0, column: line_column.1, full_line: Some(full_line) }
-    }
-}
-
-
 #[derive(Debug, PartialEq)]
 pub struct TokenInfo {
     pub token: Token,
-    pub place: Place
+    pub column: usize,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct LineTokens {
+    number: usize,
+    value: String,
+    tokens: Vec<TokenInfo>
+}
+
+
 impl TokenInfo {
-    pub fn new(token: Token, place: Place) -> Self {
-        TokenInfo { token, place }
+    pub fn new(token: Token, column: usize) -> Self {
+        TokenInfo { token, column }
     }
 }
 
-pub fn lex_content_simple(content: String) -> Result<Vec<TokenInfo>, ()> {
-    lex_content(content)
-        .map(|line_tokens| line_tokens
-            .into_iter()
-            .flat_map(|(tokens, line)| tokens)
-            .collect()
+pub fn to_simple_format(tokens: Vec<LineTokens>) -> Vec<(Token, usize, usize)> {
+    tokens.into_iter()
+        .map(|lt| (lt.tokens, lt.number))
+        .flat_map(|(tokens, line)| tokens.into_iter()
+            .map(move |ti| (ti.token, ti.column, line))
         )
+        .collect()
 }
 
-pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()> {
-    let mut lines: Vec<(Vec<TokenInfo>, String)> = Vec::new();
+pub fn lex_content_simple(content: String) -> Result<Vec<LineTokens>, String> {
+    let (res, errs) = lex_content(content);
+    return if errs.is_empty() {
+        Ok(res)
+    } else {
+        Err(errs.join("\n"))
+    }
+}
+
+pub fn lex_content(content: String) -> (Vec<LineTokens>, Vec<String>) {
+    let mut lines = Vec::new();
+    let mut errors = Vec::new();
     let mut line_counter: usize = 1;
     let mut ml_comment = false;
     for line in content.lines() {
@@ -140,7 +127,6 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
         let mut tokens = Vec::new();
 
         'over_line_loop: while let Some((index, current_char)) = char_itr.next() {
-            let place = Place::new_full((line_counter, index + 1), line.to_owned());
 
             if ml_comment && current_char == '*' && char_itr.peek().is_some() && char_itr.peek().expect("Unr!").1 == '/' {
                 char_itr.next().expect("Unr!");
@@ -163,12 +149,12 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                                 literal_buffor.push(char_itr.next().expect("Unr").1);
                             }
                         } else {
-                            report_error("Unfinished string literal".to_owned(), None, Some(&place), Some(line.to_owned()));
+                            errors.push(report_error("Unfinished string literal".to_owned(), index + 1, line_counter));
                             break 'str_literal_loop;
                         }
                     }
 
-                    tokens.push(TokenInfo::new(Token::Literal(Literal::String(literal_buffor.iter().collect())), place.clone()));
+                    tokens.push(TokenInfo::new(Token::Literal(Literal::String(literal_buffor.iter().collect())), index + 1));
                 },
                 '0'..='9' => {
                     let mut literal_buffor = Vec::new();
@@ -189,9 +175,9 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                                 .collect::<String>()
                                 .parse::<f64>();
                             if f_literal.is_ok() {
-                                tokens.push(TokenInfo::new(Token::Literal(Literal::Float(f_literal.expect("Unr!"))), place));
+                                tokens.push(TokenInfo::new(Token::Literal(Literal::Float(f_literal.expect("Unr!"))), index + 1));
                             } else {
-                                report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()))
+                                errors.push(report_error("Failed to prase float number literal".to_owned(), index + 1, line_counter));
                             }
 
                         },
@@ -200,13 +186,13 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                                 .collect::<String>()
                                 .parse::<i64>();
                             if f_literal.is_ok() {
-                                tokens.push(TokenInfo::new(Token::Literal(Literal::Integer(f_literal.expect("Unr!"))), place));
+                                tokens.push(TokenInfo::new(Token::Literal(Literal::Integer(f_literal.expect("Unr!"))), index + 1));
                             } else {
-                                report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()))
+                                errors.push(report_error("Failed to prase float number literal".to_owned(), index + 1, line_counter));
                             };
                         }
                         _ => {
-                            report_error("Failed to prase float number literal".to_owned(), None, Some(&place), Some(line.to_owned()));
+                            errors.push(report_error("Failed to prase float number literal".to_owned(), index + 1, line_counter));
                         }
                     }
                 }
@@ -233,32 +219,32 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                         "false" => Token::Literal(Literal::Boolean(false)),
                         _       => Token::Identifier(idenf),
                     };
-                    tokens.push(TokenInfo::new(token, place));
+                    tokens.push(TokenInfo::new(token, index + 1));
                 }
                 '<' => {
                     tokens.push(match  char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::LesserEq), place)
+                            TokenInfo::new(Token::Operator(Operator::LesserEq), index + 1)
                         },
                         Some((_, '<')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::Shl), place)
+                            TokenInfo::new(Token::Operator(Operator::Shl), index + 1)
                         },
-                        _ => TokenInfo::new(Token::Operator(Operator::Lesser), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Lesser), index + 1),
                     });
                 },
                 '>' => {
                         tokens.push(match char_itr.peek() {
                             Some((_, '=')) => {
                                 let _ = char_itr.next().expect("Unr!");
-                                TokenInfo::new(Token::Operator(Operator::GreaterEq), place)
+                                TokenInfo::new(Token::Operator(Operator::GreaterEq), index + 1)
                             },
                             Some((_, '>')) => {
                                 let _ = char_itr.next().expect("Unr!");
-                                TokenInfo::new(Token::Operator(Operator::Shr), place)
+                                TokenInfo::new(Token::Operator(Operator::Shr), index + 1)
                             },
-                            _ => TokenInfo::new(Token::Operator(Operator::Greater), place),
+                            _ => TokenInfo::new(Token::Operator(Operator::Greater), index + 1),
                         }
                     );
                 },
@@ -266,27 +252,27 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                     tokens.push(match char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::AssingInc), place)
+                            TokenInfo::new(Token::Operator(Operator::AssingInc), index + 1)
                         }
-                        _ => TokenInfo::new(Token::Operator(Operator::Plus), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Plus), index + 1),
                     })
                 },
                 '-' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::AssignDec), place)
+                            TokenInfo::new(Token::Operator(Operator::AssignDec), index + 1)
                         }
-                        _ => TokenInfo::new(Token::Operator(Operator::Minus), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Minus), index + 1),
                     })
                 },
                 '*' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::AssignMul), place)
+                            TokenInfo::new(Token::Operator(Operator::AssignMul), index + 1)
                         }
-                        _ => TokenInfo::new(Token::Operator(Operator::Multip), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Multip), index + 1),
                     })
                 },
                 '/' => {
@@ -298,12 +284,12 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                         tokens.push(match  nx {
                             Some((_, '=')) => {
                                 let _ = char_itr.next().expect("Unr!");
-                                TokenInfo::new(Token::Operator(Operator::AssignDiv), place)
+                                TokenInfo::new(Token::Operator(Operator::AssignDiv), index + 1)
                             },
                             Some((_, '/')) => { // comments
                                 break 'over_line_loop;
                             },
-                            _ => TokenInfo::new(Token::Operator(Operator::Div), place),
+                            _ => TokenInfo::new(Token::Operator(Operator::Div), index + 1),
                         })
                     }
                 },
@@ -311,227 +297,175 @@ pub fn lex_content(content: String) -> Result<Vec<(Vec<TokenInfo>, String)>, ()>
                     tokens.push(match char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::Neq), place)
+                            TokenInfo::new(Token::Operator(Operator::Neq), index + 1)
                         }
-                        _ => TokenInfo::new(Token::Operator(Operator::Not), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Not), index + 1),
                     })
                 },
                 ';' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::Semicolon), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::Semicolon), index + 1));
                 },
                 '=' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, '=')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::Eq), place)
+                            TokenInfo::new(Token::Operator(Operator::Eq), index + 1)
                         },
-                        _ => TokenInfo::new(Token::Operator(Operator::Assign), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::Assign), index + 1),
                     });
                 }
                 '?' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::IfExpr), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::IfExpr), index + 1));
                 },
                 ':' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, ':')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::ModStream), place)
+                            TokenInfo::new(Token::Operator(Operator::ModStream), index + 1)
                         },
-                        _ => TokenInfo::new(Token::Operator(Operator::ElseExpr), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::ElseExpr), index + 1),
                     });
                 },
                 '&' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, '&')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::And), place)
+                            TokenInfo::new(Token::Operator(Operator::And), index + 1)
                         },
-                        _ => TokenInfo::new(Token::Operator(Operator::BitAnd), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::BitAnd), index + 1),
                     });
                 },
                 '|' => {
                     tokens.push(match char_itr.peek() {
                         Some((_, '|')) => {
                             let _ = char_itr.next().expect("Unr!");
-                            TokenInfo::new(Token::Operator(Operator::Or), place)
+                            TokenInfo::new(Token::Operator(Operator::Or), index + 1)
                         },
-                        _ => TokenInfo::new(Token::Operator(Operator::BitOr), place),
+                        _ => TokenInfo::new(Token::Operator(Operator::BitOr), index + 1),
                     });
                 }
                 '%' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::Modulo), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::Modulo), index + 1));
                 },
                 '{' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpBrace), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpBrace), index + 1));
                 },
                 '}' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloBrace), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloBrace), index + 1));
                 },
                 '(' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpParenth), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpParenth), index + 1));
                 },
                 ')' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloParenth), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloParenth), index + 1));
                 },
                 '[' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpArr), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::OpArr), index + 1));
                 },
                 ']' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloArr), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::CloArr), index + 1));
                 },
                 ',' => {
-                    tokens.push(TokenInfo::new(Token::Operator(Operator::Separator), place));
+                    tokens.push(TokenInfo::new(Token::Operator(Operator::Separator), index + 1));
                 }
                 ' ' => { },
                 _  => unreachable!(),
             }
         }
 
-        lines.push((tokens.drain(0..).collect(), line.to_owned()));
+        lines.push(LineTokens {
+            number: line_counter,
+            value: line.to_owned(),
+            tokens: tokens.drain(0..).collect(),
+        });
         line_counter += 1;
 
     };
 
-    return Ok(lines);
+    return (lines, errors);
 }
 
-pub fn report_error(error_message: String, token: Option<&TokenInfo>, place: Option<&Place>, error_line: Option<String>) {
-    print!("{}", create_error_msg(error_message, token, place, error_line));
+pub fn report_error(error_message: String, column: usize, line: usize) -> String {
+    return format!("Error: {} - at line: {}, col: {}.", error_message, line, column);
 }
 
-pub fn create_error_msg(error_message: String, token: Option<&TokenInfo>, place: Option<&Place>, error_line: Option<String>) -> String {
-    let mut str_builder = String::new();
-    str_builder = format!("{}{}", str_builder, format!("[] Err: {}\n", error_message));
-    if let Some(tok) = token {
-        str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed on: {:?}, at (line, column): ({}, {})\n", tok.token, tok.place.line, tok.place.column));
-        if let Some(err_l) = &tok.place.full_line {
-            str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed on line: {}\n", err_l));
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Literal(lt) => write!(f, "{}", lt),
+            Token::Identifier(id) => write!(f, "{}", id),
+            Token::Keyword(s) => write!(f, "{:?}", s),
+            Token::Operator(op) => write!(f, "{}", op),
+            Token::Eof => write!(f, " [EOF]"),
         }
     }
-    if let Some(pl) = place {
-        str_builder = format!("{}{}", str_builder, format!("[] Err: Compilation failed at (line, column): ({}, {})\n", pl.line, pl.column));
+}
+
+impl Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operator::Eq => write!(f, "=="),
+            Operator::Neq => write!(f, "!="),
+            Operator::Greater => write!(f, ">"),
+            Operator::GreaterEq => write!(f, ">="),
+            Operator::Lesser => write!(f, "<"),
+            Operator::LesserEq => write!(f, "<="),
+            Operator::Plus => write!(f, "+"),
+            Operator::Minus => write!(f, "-"),
+            Operator::Multip => write!(f, "*"),
+            Operator::Div => write!(f, "/"),
+            Operator::Semicolon => write!(f, ";"),
+            Operator::Not => write!(f, "!"),
+            Operator::And => write!(f, "&&"),
+            Operator::Or => write!(f, "||"),
+            Operator::BitAnd => write!(f, "&"),
+            Operator::BitOr => write!(f, "|"),
+            Operator::Shl => write!(f, "<<"),
+            Operator::Shr => write!(f, ">>"),
+            Operator::Modulo => write!(f, "%"),
+            Operator::Assign => write!(f, "="),
+            Operator::AssingInc => write!(f, "+="),
+            Operator::AssignDec => write!(f, "-="),
+            Operator::AssignMul => write!(f, "*="),
+            Operator::AssignDiv => write!(f, "/="),
+            Operator::IfExpr => write!(f, "?"),
+            Operator::ElseExpr => write!(f, ":"),
+            Operator::ModStream => write!(f, "::"),
+            Operator::OpBrace => write!(f, "{{"),
+            Operator::CloBrace => write!(f, "}}"),
+            Operator::OpParenth => write!(f, "("),
+            Operator::CloParenth => write!(f, ")"),
+            Operator::OpArr => write!(f, "["),
+            Operator::CloArr => write!(f, "]"),
+            Operator::Separator => write!(f, ",")
+        }
     }
-    if let Some(er_l) = error_line {
-        str_builder = format!("{}{}", str_builder, format!("[] Error line: {}\n", er_l));
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Float(v) => write!(f, "{}", v),
+            Literal::Integer(v) => write!(f, "{}", v),
+            Literal::Boolean(v) => write!(f, "{}", v),
+            Literal::String(v) => write!(f, "{}", v),
+        }
     }
-    return str_builder;
 }
 
 
 mod tests {
     #![allow(unused_imports)]
     use crate::{*, lex::Operator};
-
-    use super::{lex_content, TokenInfo, Token, Place};
-
-#[test]
-fn should_lex_string_literal() {
-    assert_eq!(lex_content("\"ESSA\"".to_owned()),
-        Ok(vec![
-            (vec![
-                (TokenInfo::new(Token::Literal(Literal::String("ESSA".to_owned())), Place::new_full((1, 1), "\"ESSA\"".to_owned())))
-            ], "\"ESSA\"".to_owned())
-        ])
-    )
-}
+    use crate::lex::LineTokens;
+    use super::{lex_content, TokenInfo, Token};
 
 #[test]
 fn should_parse_identifier() {
-    assert_eq!(lex_content("thisIsMy_d".to_owned()),
-        Ok(vec![
-            (vec![
-                (TokenInfo::new(Token::Identifier("thisIsMy_d".to_owned()), Place::new_full((1, 1), "thisIsMy_d".to_owned())))
-            ], "thisIsMy_d".to_owned())
-        ])
+    assert_eq!(lex_content("thisIsMy_d ESSA\n120 5412\n+-/*&".to_owned()),
+        (vec![], vec![])
     )
-}
-
-#[test]
-fn should_parse_number_literals() {
-    assert_eq!(lex_content("420.69 17".to_owned()),
-        Ok(vec![
-            (vec![
-                TokenInfo::new(Token::Literal(Literal::Float(420.69)), Place::new_full((1, 1), "420.69 17".to_owned())),
-                TokenInfo::new(Token::Literal(Literal::Integer(17)), Place::new_full((1, 8), "420.69 17".to_owned()))
-            ], "420.69 17".to_owned())
-        ])
-    )
-}
-
-
-#[test]
-fn should_parse_boolean_literals() {
-    assert_eq!(lex_content("true false".to_owned()),
-        Ok(vec![
-            (vec![
-                TokenInfo::new(Token::Literal(Literal::Boolean(true)), Place::new_full((1, 1), "true false".to_owned())),
-                TokenInfo::new(Token::Literal(Literal::Boolean(false)), Place::new_full((1, 6), "true false".to_owned()))
-            ], "true false".to_owned())
-        ])
-    )
-}
-
-#[test]
-fn should_parse_operators() {
-    let expected = vec![
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Eq), Place::new_full((1, 1), "==".to_owned())),
-            ], "==".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Neq), Place::new_full((2, 1), "!=".to_owned())),
-            ], "!=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Greater), Place::new_full((3, 1), ">".to_owned())),
-            ], ">".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::GreaterEq), Place::new_full((4, 1), ">=".to_owned())),
-            ], ">=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Lesser), Place::new_full((5, 1), "<".to_owned())),
-            ], "<".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::LesserEq), Place::new_full((6, 1), "<=".to_owned())),
-            ], "<=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Plus), Place::new_full((7, 1), "+".to_owned())),
-            ], "+".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Minus), Place::new_full((8, 1), "-".to_owned())),
-            ], "-".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Multip), Place::new_full((9, 1), "*".to_owned())),
-            ], "*".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Div), Place::new_full((10, 1), "/".to_owned())),
-            ], "/".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Semicolon), Place::new_full((11, 1), ";".to_owned())),
-            ], ";".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Not), Place::new_full((12, 1), "!".to_owned())),
-            ], "!".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::Assign), Place::new_full((13, 1), "=".to_owned())),
-            ], "=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::AssingInc), Place::new_full((14, 1), "+=".to_owned())),
-            ], "+=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::AssignDec), Place::new_full((15, 1), "-=".to_owned())),
-            ], "-=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::AssignMul), Place::new_full((16, 1), "*=".to_owned())),
-            ], "*=".to_owned()),
-            (vec![
-                TokenInfo::new(Token::Operator(Operator::AssignDiv), Place::new_full((17, 1), "/=".to_owned())),
-            ], "/=".to_owned()),
-        ];
-    let res = lex_content("==\n!=\n>\n>=\n<\n<=\n+\n-\n*\n/\n;\n!\n=\n+=\n-=\n*=\n/=".to_owned());
-    assert!(res.is_ok());
-    for ((res_tok, res_line), (ex_tok, ex_line)) in res.expect("Unr").iter().zip(expected.iter()) {
-        assert_eq!(res_tok, ex_tok);
-        assert_eq!(res_line, ex_line);
-    }
 }
 
 }
