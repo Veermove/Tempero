@@ -10,7 +10,7 @@ use std::{fs::File, io::{self, Read}, collections::HashMap};
 
 use lex::*;
 use exprparse::*;
-use stmtparse::State;
+use stmtparse::{State, Statement};
 use typecheck::*;
 
 use crate::eval::eval_exp;
@@ -77,10 +77,20 @@ fn read_comp() -> std::io::Result<()> {
     }
 
     let s_tokens = lex::to_simple_format(tokens);
-    let prog_statements = stmtparse::parse_program(s_tokens);
+    let (prog_statements, state) = stmtparse::parse_program(s_tokens);
     for p_stms in prog_statements {
         if let Ok(prog) = p_stms {
-            println!("{}", prog);
+
+            if let Statement::Assignment(id) = prog {
+                if let Some(v) = state.get(id.as_str()) {
+                    let res = eval_exp(&v.value.expression, &state);
+                    if let Ok(l) = res {
+                        println!("{}", l);
+                    }
+                }
+
+            }
+
         } else if let Err(err) = p_stms {
             println!("{}", err);
         };

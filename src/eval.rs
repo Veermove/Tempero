@@ -79,6 +79,7 @@ fn resolve_variable(variable_name: &String, state: &State) -> Result<Literal, St
         state.get(variable_name.as_str())
             .map(|s| s.value.clone())
             .ok_or(format!("Cannot resolve variable: {}", variable_name))
+            .and_then(|exp| eval_exp(&exp.expression, state))
     } else {
         Err(format!("Cannot resolve variable: {}", variable_name))
     }

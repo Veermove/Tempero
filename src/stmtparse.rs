@@ -1,12 +1,17 @@
 use std::{fmt::Display, collections::HashMap};
 
-use crate::{exprparse::{self, EnumeratedTokens, Expression}, lex::{Operator, Token, Literal}, typecheck::{TExpression}};
+use crate::{
+    exprparse::{self, EnumeratedTokens, Expression},
+    lex::{Operator, Token, Literal, Keyword},
+    typecheck::{TExpression}
+};
 
 
 #[derive(Debug, Clone)]
 pub enum Statement {
     Expr(TExpression),
     Print(TExpression),
+    Assignment(String)
 }
 
 
@@ -14,18 +19,19 @@ pub enum Statement {
 pub enum TyplessStatement {
     Expr(Expression),
     Print(Expression),
+    Assignment(String, Expression),
 }
 
-pub type State<'a> = HashMap<&'a str, Variable>;
+pub type State = HashMap<String, Box<Variable>>;
 
 pub struct Variable {
-    pub value: Literal,
+    pub value: TExpression,
 }
 
-pub fn parse_program(tokens: EnumeratedTokens) -> Vec<Result<Statement, String>> {
+pub fn parse_program(tokens: EnumeratedTokens) -> (Vec<Result<Statement, String>>, State) {
     let mut stmts = Vec::new();
     let mut index = 0;
-    let mut state: HashMap<&str, Variable> = HashMap::new();
+    let mut state: HashMap<String, Box<Variable>> = HashMap::new();
 
     loop {
         if index >= tokens.len() {
@@ -41,25 +47,81 @@ pub fn parse_program(tokens: EnumeratedTokens) -> Vec<Result<Statement, String>>
         }
     }
 
-    return stmts
-        .into_iter()
-        .map(|r| r.and_then(|r| to_typed_stmt(r, &state)))
-        .collect();
+    return (
+        stmts
+            .into_iter()
+            .map(|r| r.and_then(|r| to_typed_stmt(r, &mut state)))
+            .collect(),
+        state
+        );
 }
 
-fn to_typed_stmt(stmt: TyplessStatement, state: &State) -> Result<Statement, String> {
+fn to_typed_stmt(stmt: TyplessStatement, state: &mut State) -> Result<Statement, String> {
     match stmt {
         TyplessStatement::Expr(v) => Ok(Statement::Expr(TExpression::new(v, state)?)),
         TyplessStatement::Print(v) => Ok(Statement::Print(TExpression::new(v, state)?)),
+        TyplessStatement::Assignment(v, expr) => {
+            let t_expr = Box::new(Variable { value: TExpression::new(expr, state)?});
+
+            state.insert(v.clone(), t_expr );
+            Ok(Statement::Assignment(v))
+        },
     }
 }
 
 fn parse_stmt(tokens: &EnumeratedTokens, o_index: usize) -> Result<(TyplessStatement, usize), String> {
-    prase_print_stmt(tokens, o_index)
+    parse_assign(tokens, o_index)
+}
+
+fn parse_assign(tokens: &EnumeratedTokens, o_index: usize) -> Result<(TyplessStatement, usize), String> {
+    let initial = tokens.get(o_index);
+    if !matches!(initial, Some((Token::Keyword(Keyword::Let), _, _))) {
+        return parse_expr_stmt(tokens, o_index);
+    }
+    let (o_index, identfier) = (o_index + 1, tokens.get(o_index + 1));
+
+    if !matches!(identfier, Some((Token::Identifier(_), _, _))) {
+        if let Some((t, l, r)) = identfier {
+            return Err(format!("Expected identifier after keyowrd 'let', but got: {}, at line: {}, col: {}", t, l, r));
+        } else {
+            return Err(format!("Expected identifier after keyword 'let'."))
+        }
+    };
+
+    let (assignee,_, _) = identfier.unwrap();
+
+    let (o_index, operator) = (o_index + 1, tokens.get(o_index + 1));
+
+    if !matches!(operator, Some((Token::Operator(Operator::Assign), _, _))) {
+        if let Some((t, l, r)) = identfier {
+            return Err(format!("Expected operator after 'let <identifier>', but got: {}, at line: {}, col: {}", t, l, r));
+        } else {
+            return Err(format!("Expected operator after 'let <identifier>'."));
+        }
+    };
+
+    // dbg!(o_index, &tokens);
+    let (expr, o_index) = exprparse::parse_expr(&tokens, o_index + 1)?;
+
+    if !matches!(tokens.get(o_index), Some((Token::Operator(Operator::Semicolon), _, _))) {
+        if let Some((t, l, r)) = identfier {
+            return Err(format!("Expected semicolon operator after 'let <identifier> <op> <expr>', but got: {}, at line: {}, col: {}", t, l, r));
+        } else {
+            return Err(format!("Expected semicolon
+            operator after 'let <identifier> <op> <expr>'."));
+        }
+    };
+
+    if let Token::Identifier(id) = assignee {
+        return Ok((TyplessStatement::Assignment(id.to_owned(), expr), o_index + 1));
+    }
+    unreachable!()
+
 }
 
 
-fn prase_print_stmt(tokens: &EnumeratedTokens, o_index: usize) -> Result<(TyplessStatement, usize), String> {
+
+fn parse_print_stmt(tokens: &EnumeratedTokens, o_index: usize) -> Result<(TyplessStatement, usize), String> {
     let p_print = tokens.get(o_index);
     if !matches!(p_print, Some((Token::Identifier(id), _, _)) if id.eq("print")) {
         return parse_expr_stmt(tokens, o_index);
@@ -94,6 +156,7 @@ impl Display for Statement {
         match self {
             Statement::Expr(a) => write!(f, "[{:?}] {} ;", a.exprssion_type, a.expression),
             Statement::Print(a) => write!(f, "[{:?}] print {} ;", a.exprssion_type, a.expression),
+            Statement::Assignment(v) => write!(f, "{}", v)
         }
     }
 }

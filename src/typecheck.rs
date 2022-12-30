@@ -1,6 +1,8 @@
-use std::collections::HashMap;
-
-use crate::{lex::{Operator, Literal}, exprparse::Expression, stmtparse::State};
+use crate::{
+    lex::{Operator, Literal},
+    exprparse::Expression,
+    stmtparse::State
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -86,7 +88,6 @@ fn find_type_for_literal(token: &Literal) -> Result<Type, String> {
         Literal::Integer(_) => Ok(Type::Int),
         Literal::Boolean(_) => Ok(Type::Bool),
         Literal::String(_) => Ok(Type::String),
-        _ => Err(format!("Can't find type for token: {:?}", token))
     }
 }
 
@@ -114,7 +115,7 @@ fn find_bin_operator_for_types(left: &Type, right: &Type) -> Vec<Operator> {
 fn find_type_for_variable_reference(variable_name: &String, state: &State) -> Result<Type, String> {
     state.get(variable_name.as_str())
         .ok_or(format!("Failed to resolve variable {}", variable_name))
-        .and_then(|var| find_type_for_literal(&var.value))
+        .map(|var| var.value.exprssion_type.clone())
 }
 
 fn find_un_operator_for_types(exp: &Type) -> Vec<Operator> {
