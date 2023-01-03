@@ -1,21 +1,7 @@
-use std::fmt::Display;
-
-use crate::lex::{self, Operator, Literal, Token};
-
-
-pub type EnumeratedTokens = Vec<(Token, usize, usize)>;
-
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Expression {
-    Literal(Literal),
-    Variable(String),
-    Grouping(Box<Expression>),
-    Unary(Operator, Box<Expression>),
-    Binary(Box<Expression>, Operator, Box<Expression>),
-    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
-    Tuple(Vec<Expression>)
-}
+use crate::{
+    lex::{self},
+    types::{Expression, EnumeratedTokens, Operator, Token}
+};
 
 pub fn prase_expressions(expression_tokens: EnumeratedTokens) -> (Vec<Expression>, usize, Vec<String>) {
     let mut exps = Vec::new();
@@ -276,23 +262,14 @@ pub fn find_next_start(tokens: &EnumeratedTokens, index: usize) -> usize {
         .enumerate()
         .skip(index)
         .find(|(_, (token, _, _))| match token {
-            Token::Eof | Token::Keyword(_) | Token::Operator(Operator::Semicolon) => true,
+            Token::Eof
+            | Token::Keyword(_)
+            | Token::Operator(Operator::Semicolon)
+            | Token::Operator(Operator::CloBrace)
+              => true,
             _ => false
         })
         .map(|(i, _)| i + 1)
         .unwrap_or(tokens.len() + 1)
 }
 
-impl Display for Expression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Expression::Literal(token) => write!(f, "{}", token),
-            Expression::Grouping(e) => write!(f, "( {} )", e),
-            Expression::Unary(op, exp) => write!(f, "{}( {} )", op, exp),
-            Expression::Binary(l, op, r) => write!(f, "{} {} {}", l, op, r),
-            Expression::Conditional(c, l, r) => write!(f, "{} ? {} : {} ", c, l, r),
-            Expression::Variable(ident) => write!(f, "{}", ident),
-            Expression::Tuple(_) => unimplemented!(),
-        }
-    }
-}

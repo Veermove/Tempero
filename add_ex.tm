@@ -1,15 +1,17 @@
-let a = 1;
-let b = 2;
-let c = true;
-let d = c ? a : b;
+let c = 3;
+if 1 == 1 {
+    let a = 1;
+    let b = a + 1;
+    let d = a + b + c;
+} else {
+    let a = 1;
+}
 
 // "essa" == "izi" ? (132 ? 1 : 2) : 3;
 // 10.11 ? (132 ? 1 : 2) : 3;
 // true ? 15 : "milion kurwa";
 //"essa" == "izi" ? (132 ? 1 : 2) : 3;
 //"twój stary";
-//"piwo" + "twój stary" == "wpierdol";
-//"piwo" + "twój stary" == "wpierdol"
 /*
 
 (a && b) ? 1 : 2

@@ -1,35 +1,11 @@
 use crate::{
-    lex::{Operator, Literal},
-    exprparse::Expression,
-    stmtparse::State
+    types::{Literal, Expression, BindingRequests},
+    types::Operator::{*, self},
+    types::Type::{self}
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Type {
-    Tuple(Vec<Type>),
-    String,
-    Int,
-    Float,
-    Bool,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct TExpression {
-    pub exprssion_type: Type,
-    pub expression: Expression,
-}
-
-impl TExpression {
-    pub fn new(expr: Expression, state: &State) -> Result<Self, String> {
-        Ok(TExpression {
-            exprssion_type: find_expression_type(&expr, state)?,
-            expression: expr
-        })
-    }
-}
-
-pub fn find_expression_type(expression: &Expression, state: &State) -> Result<Type, String> {
-    fn find_exp_type_inner(expr: &Expression, state: &State) -> Result<Type, String> {
+pub fn find_expression_type(expression: &Expression, state: &BindingRequests) -> Result<Type, String> {
+    fn find_exp_type_inner(expr: &Expression, state: &BindingRequests) -> Result<Type, String> {
         match expr {
             Expression::Variable(variable)
                 => find_type_for_variable_reference(variable, state),
@@ -92,7 +68,6 @@ fn find_type_for_literal(token: &Literal) -> Result<Type, String> {
 }
 
 fn find_bin_operator_for_types(left: &Type, right: &Type) -> Vec<Operator> {
-    use Operator::*;
     let mut allowed_operators = vec![Eq, Neq];
     if (left == &Type::Float || left == &Type::Int)
         && (right == &Type::Float || right == &Type::Int) {
@@ -112,10 +87,10 @@ fn find_bin_operator_for_types(left: &Type, right: &Type) -> Vec<Operator> {
     allowed_operators
 }
 
-fn find_type_for_variable_reference(variable_name: &String, state: &State) -> Result<Type, String> {
+fn find_type_for_variable_reference(variable_name: &String, state: &BindingRequests) -> Result<Type, String> {
     state.get(variable_name.as_str())
-        .ok_or(format!("Failed to resolve variable {}", variable_name))
-        .map(|var| var.value.exprssion_type.clone())
+        .map(|t| t.clone())
+        .ok_or(format!("Failed to resolve variable in this scope {}", variable_name))
 }
 
 fn find_un_operator_for_types(exp: &Type) -> Vec<Operator> {
@@ -129,7 +104,6 @@ fn find_un_operator_for_types(exp: &Type) -> Vec<Operator> {
 
 fn find_type_produced_by_bin_operator(operator: &Operator, left: &Type, _right: &Type) -> Type {
     use Type::*;
-    use Operator::*;
     match operator {
         Eq => Bool,
         Neq => Bool,
@@ -152,3 +126,4 @@ fn find_type_produced_by_bin_operator(operator: &Operator, left: &Type, _right: 
         _ => unimplemented!()
     }
 }
+
